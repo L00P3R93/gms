@@ -1,16 +1,21 @@
 <?php
 
+use App\Enums\UserStatus;
 use App\Models\User;
 
+use function Pest\Laravel\get;
+
+beforeEach(function (): void {
+    $this->artisan('db:seed', ['--class' => 'RoleSeeder']);
+});
+
 test('guests are redirected to the login page', function () {
-    $response = $this->get(route('dashboard'));
-    $response->assertRedirect(route('login'));
+    get('/')->assertRedirectContains('login');
 });
 
 test('authenticated users can visit the dashboard', function () {
-    $user = User::factory()->create();
-    $this->actingAs($user);
+    $user = User::factory()->create(['status' => UserStatus::Active->value]);
+    $user->assignRole('super-admin');
 
-    $response = $this->get(route('dashboard'));
-    $response->assertOk();
+    $this->actingAs($user)->get('/')->assertOk();
 });

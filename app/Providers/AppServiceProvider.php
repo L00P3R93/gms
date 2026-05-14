@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Services\EncryptionService;
+use App\Services\GameApiService;
+use App\Services\MpesaService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +18,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(MpesaService::class);
+        $this->app->singleton(GameApiService::class);
+        $this->app->singleton(EncryptionService::class);
     }
 
     /**
