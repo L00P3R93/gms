@@ -10,6 +10,8 @@ class Account extends Model
 {
     protected $table = 'accounts';
 
+    public $timestamps = false;
+
     protected $guarded = [];
 
     const STATUS_HIDDEN = 0;

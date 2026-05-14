@@ -61,4 +61,11 @@ class GameApiService
     {
         return $this->client()->get("accounts/{$encryptedId}/transactions")->json() ?? [];
     }
+
+    public function getB2CBalance(): float
+    {
+        $response = $this->client()->get('b2c/balance')->json();
+
+        return (float) ($response['balance'] ?? 0);
+    }
 }

@@ -8,6 +8,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 
 class DependantForm
 {
@@ -23,20 +24,31 @@ class DependantForm
                         ->options(fn () => Holder::pluck('name', 'id')->toArray())
                         ->searchable()
                         ->required()
+                        ->prefixIcon(Heroicon::OutlinedUser)
+                        ->prefixIconColor('primary')
                         ->columnSpanFull(),
                     TextInput::make('name')
                         ->required()
-                        ->maxLength(80),
+                        ->maxLength(80)
+                        ->prefixIcon(Heroicon::OutlinedUser)
+                        ->prefixIconColor('primary'),
                     TextInput::make('phone')
-                        ->maxLength(50),
+                        ->maxLength(50)
+                        ->prefix('254')
+                        ->prefixIcon(Heroicon::OutlinedPhone)
+                        ->prefixIconColor('success'),
                     TextInput::make('id_no')
                         ->label('ID Number')
-                        ->maxLength(50),
+                        ->maxLength(50)
+                        ->prefixIcon(Heroicon::OutlinedIdentification)
+                        ->prefixIconColor('info'),
                     TextInput::make('share')
-                        ->label('Share (%)')
+                        ->label('Share')
                         ->numeric()
                         ->required()
-                        ->suffix('%'),
+                        ->suffix('%')
+                        ->prefixIcon(Heroicon::OutlinedChartPie)
+                        ->prefixIconColor('warning'),
                 ]),
             Section::make('Status')
                 ->columns(1)
@@ -45,7 +57,9 @@ class DependantForm
                     Select::make('status')
                         ->options(DependantStatus::class)
                         ->enum(DependantStatus::class)
-                        ->required(),
+                        ->required()
+                        ->prefixIcon(Heroicon::OutlinedCheckCircle)
+                        ->prefixIconColor('success'),
                 ]),
         ]);
     }

@@ -8,6 +8,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 
 class ExpenseForm
 {
@@ -21,12 +22,16 @@ class ExpenseForm
                     Select::make('category')
                         ->options(ExpenseCategory::class)
                         ->enum(ExpenseCategory::class)
-                        ->required(),
+                        ->required()
+                        ->prefixIcon(Heroicon::OutlinedTag)
+                        ->prefixIconColor('info'),
                     TextInput::make('amount')
                         ->numeric()
                         ->required()
                         ->minValue(0)
-                        ->prefix('KES'),
+                        ->prefix('KES')
+                        ->suffixIcon(Heroicon::OutlinedBanknotes)
+                        ->suffixIconColor('success'),
                     Textarea::make('description')
                         ->required()
                         ->columnSpanFull()

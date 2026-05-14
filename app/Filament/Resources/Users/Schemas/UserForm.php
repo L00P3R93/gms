@@ -7,6 +7,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Illuminate\Validation\Rules\Password;
 use Spatie\Permission\Models\Role;
 
@@ -23,18 +24,22 @@ class UserForm
                     TextInput::make('name')
                         ->required()
                         ->maxLength(255)
-                        ->columnSpan(1),
+                        ->prefixIcon(Heroicon::OutlinedUser)
+                        ->prefixIconColor('primary'),
                     TextInput::make('userName')
                         ->label('Username')
                         ->required()
                         ->maxLength(100)
                         ->unique(ignoreRecord: true)
-                        ->columnSpan(1),
+                        ->prefixIcon(Heroicon::OutlinedAtSymbol)
+                        ->prefixIconColor('primary'),
                     TextInput::make('email')
                         ->email()
                         ->required()
                         ->maxLength(100)
                         ->unique(ignoreRecord: true)
+                        ->prefixIcon(Heroicon::OutlinedEnvelope)
+                        ->prefixIconColor('primary')
                         ->columnSpanFull(),
                     TextInput::make('password')
                         ->password()
@@ -42,6 +47,8 @@ class UserForm
                         ->required(fn (string $context) => $context === 'create')
                         ->dehydrated(fn ($state) => filled($state))
                         ->rule(Password::defaults())
+                        ->prefixIcon(Heroicon::OutlinedLockClosed)
+                        ->prefixIconColor('warning')
                         ->columnSpanFull(),
                 ]),
             Section::make('Access & Role')
@@ -52,11 +59,15 @@ class UserForm
                     Select::make('role')
                         ->label('Role')
                         ->options(fn () => Role::pluck('name', 'name')->toArray())
-                        ->required(),
+                        ->required()
+                        ->prefixIcon(Heroicon::OutlinedShieldCheck)
+                        ->prefixIconColor('info'),
                     Select::make('status')
                         ->options(UserStatus::class)
                         ->enum(UserStatus::class)
-                        ->required(),
+                        ->required()
+                        ->prefixIcon(Heroicon::OutlinedCheckCircle)
+                        ->prefixIconColor('success'),
                 ]),
         ]);
     }
