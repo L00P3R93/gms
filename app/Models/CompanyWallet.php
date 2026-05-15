@@ -15,4 +15,8 @@ class CompanyWallet extends Model
     const MAIN_WALLET = 1;
 
     const REFERRAL_WALLET = 2;
+
+    const TYPE_COMPANY = 'company';
+
+    const TYPE_REFERRAL = 'referral';
 }

@@ -27,22 +27,31 @@ class PurchasesPage extends Page implements HasTable
 
     protected string $view = 'filament.pages.purchases-page';
 
+    public bool $apiError = false;
+
     public function table(Table $table): Table
     {
         return $table
             ->records(function (int $page, int $recordsPerPage): LengthAwarePaginator {
                 try {
-                    $raw = Cache::remember('purchases_page', 300, fn () => app(GameApiService::class)->getPurchases());
-                    $items = is_array($raw) ? $raw : [];
+                    // BUG: No global purchases listing endpoint exists on the wallet API.
+                    // Purchases are available per-customer via getCustomerPurchases().
+                    $raw = Cache::remember('purchases_page', 300, fn () => app(GameApiService::class)->listPurchases());
+                    $items = $raw['data'] ?? (is_array($raw) && ! isset($raw['status']) ? $raw : []);
                     $data = collect($items)->filter(fn ($item) => is_array($item))->values();
+
+                    $this->apiError = false;
                 } catch (\Throwable) {
+                    $this->apiError = true;
                     $data = collect();
                 }
 
-                $total = $data->count();
-                $sliced = $data->forPage($page, $recordsPerPage);
-
-                return new LengthAwarePaginator($sliced, $total, $recordsPerPage, $page);
+                return new LengthAwarePaginator(
+                    $data->forPage($page, $recordsPerPage)->values()->toArray(),
+                    $data->count(),
+                    $recordsPerPage,
+                    $page,
+                );
             })
             ->columns([
                 TextColumn::make('name')
@@ -53,7 +62,7 @@ class PurchasesPage extends Page implements HasTable
                     ->badge()
                     ->color('info'),
                 TextColumn::make('amount')
-                    ->label('Amount (KES)')
+                    ->label('Amount')
                     ->formatStateUsing(fn ($state) => 'KES '.number_format((float) ($state ?? 0), 2)),
                 TextColumn::make('value')
                     ->label('Value'),
@@ -61,7 +70,7 @@ class PurchasesPage extends Page implements HasTable
                     ->label('Date'),
             ])
             ->emptyStateHeading('No purchases found')
-            ->emptyStateDescription('Purchase data is fetched from the game API.')
+            ->emptyStateDescription($this->apiError ? 'Could not load purchase data from the API.' : 'No purchases have been recorded yet.')
             ->striped();
     }
 }

@@ -7,14 +7,13 @@ use App\Models\Account;
 use App\Models\PlayedGame;
 use App\Services\GameApiService;
 use Filament\Resources\Pages\Page;
+use Illuminate\Support\Facades\Cache;
 
 class ViewAccount extends Page
 {
     protected static string $resource = AccountResource::class;
 
     protected string $view = 'filament.resources.accounts.pages.view-account';
-
-    public Account $record;
 
     public string $activeTab = 'single_games';
 
@@ -33,13 +32,20 @@ class ViewAccount extends Page
     /** @var array<int|string, string> */
     public array $winnerNames = [];
 
+    public ?array $walletInfo = null;
+
+    public ?array $apiCustomer = null;
+
+    public bool $apiUnavailable = false;
+
     public function mount(int|string $record): void
     {
         $this->record = Account::findOrFail($record);
-        $this->loadData();
+        $this->loadLocalGames();
+        $this->loadApiData();
     }
 
-    private function loadData(): void
+    private function loadLocalGames(): void
     {
         $id = $this->record->id;
 
@@ -76,16 +82,65 @@ class ViewAccount extends Page
                 ->pluck('name', 'id')
                 ->toArray();
         }
+    }
+
+    private function loadApiData(): void
+    {
+        $customerId = $this->record->id;
+        $gameApi = app(GameApiService::class);
+
+        $anyFailed = false;
 
         try {
-            $transactions = app(GameApiService::class)->getAccountTransactions($this->record->encrypted_id);
-            $this->deposits = $transactions['deposits'] ?? [];
-            $this->withdrawals = $transactions['withdrawals'] ?? [];
-            $this->purchases = $transactions['purchases'] ?? [];
+            $this->apiCustomer = Cache::remember(
+                "api_customer_{$customerId}",
+                300,
+                fn () => $gameApi->getCustomer($customerId)
+            );
+
+            if (! empty($this->apiCustomer['wallet_id'])) {
+                $this->walletInfo = [
+                    'balance' => $this->apiCustomer['balance'] ?? 0,
+                    'deposits' => $this->apiCustomer['deposits'] ?? 0,
+                    'withdraws' => $this->apiCustomer['withdraws'] ?? 0,
+                    'purchases_load' => $this->apiCustomer['purchases_load'] ?? 0,
+                    'purchases_gift' => $this->apiCustomer['purchases_gift'] ?? 0,
+                    'purchases_emojis' => $this->apiCustomer['purchases_emojis'] ?? 0,
+                    'coins' => $this->apiCustomer['coins'] ?? 0,
+                ];
+            }
         } catch (\Throwable) {
+            $anyFailed = true;
+            $this->apiCustomer = null;
+            $this->walletInfo = null;
+        }
+
+        try {
+            $txResponse = Cache::remember(
+                "api_transactions_{$customerId}",
+                300,
+                fn () => $gameApi->getCustomerTransactions($customerId, 'all')
+            );
+            $transactions = $txResponse['transactions'] ?? [];
+            $this->deposits = array_values(array_filter($transactions, fn ($tx) => ($tx['payment_type'] ?? '') === 'deposit'));
+            $this->withdrawals = array_values(array_filter($transactions, fn ($tx) => ($tx['payment_type'] ?? '') === 'withdrawal'));
+        } catch (\Throwable) {
+            $anyFailed = true;
             $this->deposits = [];
             $this->withdrawals = [];
+        }
+
+        try {
+            $this->purchases = Cache::remember(
+                "api_purchases_{$customerId}",
+                300,
+                fn () => $gameApi->getCustomerPurchases($customerId)
+            );
+        } catch (\Throwable) {
+            $anyFailed = true;
             $this->purchases = [];
         }
+
+        $this->apiUnavailable = $anyFailed;
     }
 }

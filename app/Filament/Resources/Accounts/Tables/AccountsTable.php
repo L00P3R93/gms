@@ -61,10 +61,15 @@ class AccountsTable
                     ->color('warning')
                     ->mountUsing(function (Schema $form, $record) {
                         try {
-                            $wallet = app(GameApiService::class)->getWallet($record->encrypted_id);
-                            $form->fill(['balance' => $wallet['balance'] ?? 0]);
-                        } catch (\Throwable) {
+                            $customer = app(GameApiService::class)->getCustomer($record->id);
+                            $form->fill(['balance' => $customer['balance'] ?? 0]);
+                        } catch (\Throwable $e) {
                             $form->fill(['balance' => 0]);
+                            Notification::make()
+                                ->title('Wallet API Unavailable')
+                                ->body($e->getMessage())
+                                ->warning()
+                                ->send();
                         }
                     })
                     ->schema([
@@ -79,10 +84,14 @@ class AccountsTable
                     ])
                     ->action(function ($record, array $data) {
                         try {
-                            app(GameApiService::class)->updateWallet($record->encrypted_id, (float) $data['balance']);
+                            app(GameApiService::class)->updateCustomerWallet($record->id, (float) $data['balance']);
                             Notification::make()->title('Wallet updated')->success()->send();
-                        } catch (\Throwable) {
-                            Notification::make()->title('Failed to update wallet')->danger()->send();
+                        } catch (\Throwable $e) {
+                            Notification::make()
+                                ->title('Failed to update wallet')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
                         }
                     }),
 

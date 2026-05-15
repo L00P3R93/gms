@@ -23,10 +23,7 @@ class MyCustomers extends Page implements HasTable
 
     protected string $view = 'filament.pages.my-customers';
 
-    public static function canViewAny(): bool
-    {
-        return auth()->user()?->hasAnyRole(['super-admin', 'agent']) ?? false;
-    }
+    protected static bool $shouldRegisterNavigation = false;
 
     public function table(Table $table): Table
     {

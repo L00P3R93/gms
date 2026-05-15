@@ -43,11 +43,6 @@ test('users can not authenticate with invalid password', function () {
     $this->assertGuest();
 });
 
-test('users with two factor enabled are redirected to two factor challenge', function () {
-    // Fortify routes are ignored (Fortify::ignoreRoutes()); Filament handles 2FA separately.
-    $this->markTestSkipped('Two-factor challenge is handled by Filament, not Fortify routes.');
-});
-
 test('users can logout', function () {
     $user = User::factory()->create(['status' => UserStatus::Active->value]);
 

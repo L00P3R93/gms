@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    'game_api' => [
+        'url' => env('GAME_API_URL'),
+        'key' => env('GAME_API_KEY'),
+        'openssl_key' => env('GAME_API_OPENSSL_KEY'),
+        'openssl_method' => env('GAME_API_OPENSSL_METHOD', 'AES-256-CBC'),
+    ],
+
 ];

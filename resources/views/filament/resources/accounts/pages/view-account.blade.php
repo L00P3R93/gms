@@ -1,4 +1,17 @@
 <x-filament-panels::page>
+    {{-- API unavailability warning --}}
+    @if($this->apiUnavailable)
+        <x-filament::section>
+            <div class="flex items-center gap-3 rounded-lg border border-warning-300 bg-warning-50 px-4 py-3 dark:border-warning-700 dark:bg-warning-950">
+                <x-filament::icon icon="heroicon-o-exclamation-triangle" class="h-5 w-5 shrink-0 text-warning-500" />
+                <div>
+                    <p class="text-sm font-semibold text-warning-800 dark:text-warning-300">Wallet API Unavailable</p>
+                    <p class="text-xs text-warning-700 dark:text-warning-400">Could not connect to the wallet API. Balance, transactions, and purchase data are unavailable. Local game history is still shown below.</p>
+                </div>
+            </div>
+        </x-filament::section>
+    @endif
+
     {{-- Player Info Header --}}
     <x-filament::section>
         <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
@@ -21,6 +34,10 @@
             <div>
                 <p class="text-xs font-medium text-gray-500 dark:text-gray-400">VCoins</p>
                 <p class="mt-1 font-semibold text-gray-900 dark:text-white">{{ number_format($this->record->vcoins) }}</p>
+            </div>
+            <div>
+                <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Wallet Balance</p>
+                <p class="mt-1 font-semibold text-gray-900 dark:text-white">KES {{ number_format($this->walletInfo['balance'] ?? 0, 2) }}</p>
             </div>
             <div>
                 <p class="text-xs font-medium text-gray-500 dark:text-gray-400">Status / VIP</p>
@@ -75,18 +92,21 @@
                                     <th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">Game ID</th>
                                     <th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">Match Type</th>
                                     <th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">Bet (KES)</th>
-                                    <th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">Winner</th>
+                                    <th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">Result</th>
                                     <th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">Date</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
                                 @foreach($this->singleGames as $game)
+                                    @php $won = (string) $game['winner'] === (string) $this->record->id; @endphp
                                     <tr class="odd:bg-white even:bg-gray-50 dark:odd:bg-gray-900 dark:even:bg-gray-800/50">
                                         <td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ $game['id'] }}</td>
                                         <td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ $game['match_type'] }}</td>
                                         <td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ number_format($game['amount'], 2) }}</td>
-                                        <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                            {{ $this->winnerNames[$game['winner']] ?? ($game['winner'] ?: '—') }}
+                                        <td class="px-4 py-3">
+                                            <x-filament::badge :color="$won ? 'success' : 'danger'">
+                                                {{ $won ? 'Won ✓' : 'Lost' }}
+                                            </x-filament::badge>
                                         </td>
                                         <td class="px-4 py-3 text-gray-500 dark:text-gray-400">{{ $game['time'] }}</td>
                                     </tr>

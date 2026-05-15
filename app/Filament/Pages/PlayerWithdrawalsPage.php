@@ -27,22 +27,31 @@ class PlayerWithdrawalsPage extends Page implements HasTable
 
     protected string $view = 'filament.pages.player-withdrawals-page';
 
+    public bool $apiError = false;
+
     public function table(Table $table): Table
     {
         return $table
             ->records(function (int $page, int $recordsPerPage): LengthAwarePaginator {
                 try {
-                    $raw = Cache::remember('player_withdrawals_page', 300, fn () => app(GameApiService::class)->getWithdrawals());
-                    $items = is_array($raw) ? $raw : [];
+                    // BUG: No global withdrawal listing endpoint exists on the wallet API.
+                    // Withdrawals are available per-customer via getCustomerTransactions().
+                    $raw = Cache::remember('player_withdrawals_page', 300, fn () => app(GameApiService::class)->listWithdrawals());
+                    $items = $raw['data'] ?? (is_array($raw) && ! isset($raw['status']) ? $raw : []);
                     $data = collect($items)->filter(fn ($item) => is_array($item))->values();
+
+                    $this->apiError = false;
                 } catch (\Throwable) {
+                    $this->apiError = true;
                     $data = collect();
                 }
 
-                $total = $data->count();
-                $sliced = $data->forPage($page, $recordsPerPage);
-
-                return new LengthAwarePaginator($sliced, $total, $recordsPerPage, $page);
+                return new LengthAwarePaginator(
+                    $data->forPage($page, $recordsPerPage)->values()->toArray(),
+                    $data->count(),
+                    $recordsPerPage,
+                    $page,
+                );
             })
             ->columns([
                 TextColumn::make('transaction_id')
@@ -51,7 +60,8 @@ class PlayerWithdrawalsPage extends Page implements HasTable
                 TextColumn::make('name')
                     ->label('Player Name')
                     ->searchable(),
-                TextColumn::make('phone'),
+                TextColumn::make('phone')
+                    ->label('Phone'),
                 TextColumn::make('amount')
                     ->label('Amount')
                     ->formatStateUsing(fn ($state) => 'KES '.number_format((float) ($state ?? 0), 2)),
@@ -59,7 +69,7 @@ class PlayerWithdrawalsPage extends Page implements HasTable
                     ->label('Date'),
             ])
             ->emptyStateHeading('No withdrawals found')
-            ->emptyStateDescription('Player withdrawal data is fetched from the game API.')
+            ->emptyStateDescription($this->apiError ? 'Could not load withdrawal data from the API.' : 'No withdrawals have been recorded yet.')
             ->striped();
     }
 }

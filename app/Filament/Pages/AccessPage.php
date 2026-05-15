@@ -15,6 +15,8 @@ class AccessPage extends Page implements HasTable
     use InteractsWithTable;
     use SuperAdminAccess;
 
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static string|null|\BackedEnum $navigationIcon = 'heroicon-o-key';
 
     protected static ?string $navigationLabel = 'Player Access';

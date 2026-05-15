@@ -26,3 +26,6 @@ yarn-error.log
 /.claude
 /tasks
 /.junie
+/storage/mpesa/*.pem
+/storage/mpesa/*.txt
+/storage/payslips/
