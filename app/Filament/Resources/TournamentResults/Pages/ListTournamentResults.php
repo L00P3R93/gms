@@ -4,14 +4,20 @@ namespace App\Filament\Resources\TournamentResults\Pages;
 
 use App\Filament\Resources\TournamentResults\TournamentResultResource;
 use App\Services\GameApiService;
-use Filament\Resources\Pages\ListRecords;
+use App\Support\ApiTablePaginator;
+use App\Support\Format;
+use Filament\Resources\Pages\Page;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Concerns\InteractsWithTable;
+use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
 
-class ListTournamentResults extends ListRecords
+class ListTournamentResults extends Page implements HasTable
 {
+    use InteractsWithTable;
+
     protected static string $resource = TournamentResultResource::class;
 
     protected string $view = 'filament.resources.tournament-results.pages.list-tournament-results';
@@ -21,34 +27,22 @@ class ListTournamentResults extends ListRecords
     public function table(Table $table): Table
     {
         return $table
-            ->records(function (int $page, int $recordsPerPage): LengthAwarePaginator {
-                try {
-                    // gameType 1 = Tournament
-                    $data = Cache::remember('api_tournament_results', 120, fn () => collect(
-                        app(GameApiService::class)->getCompetitionResults(1)
-                    )->values()->toArray());
-
-                    $this->apiError = false;
-                } catch (\Throwable) {
-                    $this->apiError = true;
-                    $data = [];
-                }
-
-                $collection = collect($data);
-
-                return new LengthAwarePaginator(
-                    $collection->forPage($page, $recordsPerPage)->values()->toArray(),
-                    $collection->count(),
-                    $recordsPerPage,
-                    $page,
-                );
-            })
+            ->records(fn (int|string $page, int|string $recordsPerPage, ?string $search, ?string $sortColumn, ?string $sortDirection): LengthAwarePaginator => ApiTablePaginator::make(
+                response: $this->fetchRecords(),
+                page: $page,
+                perPage: $recordsPerPage,
+                search: $search,
+                searchKeys: ['competition_id', 'name'],
+                sortColumn: $sortColumn,
+                sortDirection: $sortDirection,
+            ))
             ->columns([
                 TextColumn::make('competition_id')
                     ->label('Competition ID')
                     ->searchable(),
                 TextColumn::make('name')
-                    ->label('Player/Winner'),
+                    ->label('Player/Winner')
+                    ->searchable(),
                 TextColumn::make('jp_rounds')
                     ->label('Rounds'),
                 TextColumn::make('level')
@@ -58,24 +52,49 @@ class ListTournamentResults extends ListRecords
                 TextColumn::make('payment_type')
                     ->label('Type')
                     ->badge()
-                    ->formatStateUsing(fn ($state) => ucfirst((string) ($state ?? '—')))
-                    ->color(fn ($state) => match ($state) {
+                    ->formatStateUsing(fn ($state): string => ucfirst((string) ($state ?? '—')))
+                    ->color(fn ($state): string => match ($state) {
                         'win' => 'success',
                         'deposit' => 'info',
                         default => 'gray',
                     }),
                 TextColumn::make('amount')
                     ->label('Amount')
-                    ->formatStateUsing(fn ($state) => 'KES '.number_format((float) ($state ?? 0), 2)),
+                    ->sortable()
+                    ->formatStateUsing(fn ($state): string => Format::money($state)),
                 TextColumn::make('income')
                     ->label('House Income')
-                    ->formatStateUsing(fn ($state) => 'KES '.number_format((float) ($state ?? 0), 2)),
+                    ->sortable()
+                    ->formatStateUsing(fn ($state): string => Format::money($state)),
                 TextColumn::make('created_at')
                     ->label('Date')
-                    ->dateTime(),
+                    ->sortable()
+                    ->formatStateUsing(fn ($state): string => Format::dateTime($state)),
             ])
-            ->emptyStateHeading('No tournament results found')
-            ->emptyStateDescription($this->apiError ? 'Could not load results from the API.' : 'No tournaments have been completed yet.')
+            ->defaultSort('created_at', 'desc')
+            ->emptyStateIcon('heroicon-o-trophy')
+            ->emptyStateHeading(fn (): string => $this->apiError ? 'Tournament results unavailable' : 'No tournament results found')
+            ->emptyStateDescription(fn (): string => $this->apiError
+                ? 'The wallet API could not be reached. Refresh the page to try again.'
+                : 'No tournaments have been completed yet.')
             ->striped();
+    }
+
+    /**
+     * @return array<int|string, mixed>
+     */
+    protected function fetchRecords(): array
+    {
+        try {
+            // gameType 1 = Tournament
+            $records = Cache::remember('api_tournament_results', 120, fn (): array => app(GameApiService::class)->getCompetitionResults(1));
+            $this->apiError = false;
+
+            return $records;
+        } catch (\Throwable) {
+            $this->apiError = true;
+
+            return [];
+        }
     }
 }

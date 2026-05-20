@@ -5,20 +5,29 @@ namespace App\Filament\Resources\GameResults\Pages;
 use App\Filament\Resources\GameResults\GameResultResource;
 use App\Filament\Resources\GameResults\Widgets\GameResultStatsWidget;
 use App\Services\GameApiService;
-use Filament\Resources\Pages\ListRecords;
+use App\Support\ApiTablePaginator;
+use App\Support\Format;
+use Filament\Resources\Pages\Page;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Concerns\InteractsWithTable;
+use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
 
-class ListGameResults extends ListRecords
+class ListGameResults extends Page implements HasTable
 {
+    use InteractsWithTable;
+
     protected static string $resource = GameResultResource::class;
 
     protected string $view = 'filament.resources.game-results.pages.list-game-results';
 
     public bool $apiError = false;
 
+    /**
+     * @return array<int, class-string>
+     */
     protected function getHeaderWidgets(): array
     {
         return [
@@ -29,27 +38,15 @@ class ListGameResults extends ListRecords
     public function table(Table $table): Table
     {
         return $table
-            ->records(function (int $page, int $recordsPerPage): LengthAwarePaginator {
-                try {
-                    $data = Cache::remember('api_game_results', 120, fn () => collect(
-                        app(GameApiService::class)->getGameResults()
-                    )->values()->toArray());
-
-                    $this->apiError = false;
-                } catch (\Throwable) {
-                    $this->apiError = true;
-                    $data = [];
-                }
-
-                $collection = collect($data);
-
-                return new LengthAwarePaginator(
-                    $collection->forPage($page, $recordsPerPage)->values()->toArray(),
-                    $collection->count(),
-                    $recordsPerPage,
-                    $page,
-                );
-            })
+            ->records(fn (int|string $page, int|string $recordsPerPage, ?string $search, ?string $sortColumn, ?string $sortDirection): LengthAwarePaginator => ApiTablePaginator::make(
+                response: $this->fetchRecords(),
+                page: $page,
+                perPage: $recordsPerPage,
+                search: $search,
+                searchKeys: ['game_id', 'name'],
+                sortColumn: $sortColumn,
+                sortDirection: $sortDirection,
+            ))
             ->columns([
                 TextColumn::make('game_id')
                     ->label('Game ID')
@@ -57,8 +54,8 @@ class ListGameResults extends ListRecords
                 TextColumn::make('players')
                     ->label('Players')
                     ->badge()
-                    ->formatStateUsing(fn ($state) => $state.' Players')
-                    ->color(fn ($state) => match ((int) $state) {
+                    ->formatStateUsing(fn ($state): string => $state.' Players')
+                    ->color(fn ($state): string => match ((int) $state) {
                         2 => 'info',
                         3 => 'warning',
                         4 => 'success',
@@ -66,21 +63,47 @@ class ListGameResults extends ListRecords
                     }),
                 TextColumn::make('total_bet')
                     ->label('Total Bet')
-                    ->formatStateUsing(fn ($state) => 'KES '.number_format((float) ($state ?? 0), 2)),
+                    ->sortable()
+                    ->formatStateUsing(fn ($state): string => Format::money($state)),
                 TextColumn::make('name')
-                    ->label('Winner'),
+                    ->label('Winner')
+                    ->searchable(),
                 TextColumn::make('amount')
                     ->label('Winnings (90%)')
-                    ->formatStateUsing(fn ($state) => 'KES '.number_format((float) ($state ?? 0), 2)),
+                    ->sortable()
+                    ->formatStateUsing(fn ($state): string => Format::money($state)),
                 TextColumn::make('income')
                     ->label('House Income (10%)')
-                    ->formatStateUsing(fn ($state) => 'KES '.number_format((float) ($state ?? 0), 2)),
+                    ->sortable()
+                    ->formatStateUsing(fn ($state): string => Format::money($state)),
                 TextColumn::make('created_at')
                     ->label('Date')
-                    ->dateTime(),
+                    ->sortable()
+                    ->formatStateUsing(fn ($state): string => Format::dateTime($state)),
             ])
-            ->emptyStateHeading('No game results found')
-            ->emptyStateDescription($this->apiError ? 'Could not load results from the API.' : 'No single games have been completed yet.')
+            ->defaultSort('created_at', 'desc')
+            ->emptyStateIcon('heroicon-o-puzzle-piece')
+            ->emptyStateHeading(fn (): string => $this->apiError ? 'Game results unavailable' : 'No game results found')
+            ->emptyStateDescription(fn (): string => $this->apiError
+                ? 'The wallet API could not be reached. Refresh the page to try again.'
+                : 'No single games have been completed yet.')
             ->striped();
+    }
+
+    /**
+     * @return array<int|string, mixed>
+     */
+    protected function fetchRecords(): array
+    {
+        try {
+            $records = Cache::remember('api_game_results', 120, fn (): array => app(GameApiService::class)->getGameResults());
+            $this->apiError = false;
+
+            return $records;
+        } catch (\Throwable) {
+            $this->apiError = true;
+
+            return [];
+        }
     }
 }

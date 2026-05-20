@@ -4,11 +4,9 @@ namespace App\Filament\Resources\Accounts;
 
 use App\Filament\Resources\Accounts\Pages\ListAccounts;
 use App\Filament\Resources\Accounts\Pages\ViewAccount;
-use App\Filament\Resources\Accounts\Tables\AccountsTable;
 use App\Models\Account;
 use BackedEnum;
 use Filament\Resources\Resource;
-use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 use UnitEnum;
 
@@ -32,11 +30,6 @@ class AccountResource extends Resource
     public static function canDelete(Model $record): bool
     {
         return false;
-    }
-
-    public static function table(Table $table): Table
-    {
-        return AccountsTable::configure($table);
     }
 
     public static function getRelations(): array

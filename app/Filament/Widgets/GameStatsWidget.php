@@ -2,53 +2,50 @@
 
 namespace App\Filament\Widgets;
 
-use App\Models\PlayedGame;
+use App\Services\GameApiService;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
+use Illuminate\Support\Facades\Cache;
 
 class GameStatsWidget extends BaseWidget
 {
     protected static ?int $sort = 2;
 
+    protected ?string $heading = 'Income Today (KES)';
+
     public static function canView(): bool
     {
-        return auth()->user()?->hasRole('super-admin') ?? false;
+        // return auth()->user()?->hasRole('super-admin') ?? false;
+        return false;
     }
 
     protected function getStats(): array
     {
-        $singlesTotal = PlayedGame::whereIn('match_type', ['multiplayer2', 'multiplayer3', 'multiplayer4'])
-            ->sum('amount');
-        $singlesIncome = $singlesTotal * 0.10;
+        try {
+            $stats = Cache::remember('gms_dashboard_stats', 120,
+                fn () => app(GameApiService::class)->getDashboardStats()
+            );
+        } catch (\Throwable) {
+            $stats = [];
+        }
 
-        $tournamentTotal = PlayedGame::where('match_type', 'TN')->sum('amount');
-        $tournamentIncome = $tournamentTotal * 0.10;
-
-        $jackpotTotal = PlayedGame::where('match_type', 'JP')->sum('amount');
-        $jackpotIncome = $jackpotTotal * 0.10;
-
-        $totalRobotGames = PlayedGame::where('match_type', 'robot_game')->count();
-        $todayRobotGames = PlayedGame::where('match_type', 'robot_game')
-            ->whereDate('time', today())->count();
-        $weekRobotGames = PlayedGame::where('match_type', 'robot_game')
-            ->whereBetween('time', [now()->startOfWeek(), now()->endOfWeek()])->count();
+        $income = $stats['income'] ?? [];
 
         return [
-            Stat::make('Singles Income', 'KES '.number_format($singlesIncome, 2))
+            Stat::make('Singles Income', 'KES '.number_format((float) ($income['games'] ?? 0), 2))
                 ->description('All-time (10% house cut)')
+                ->descriptionIcon('heroicon-m-user-group')
                 ->color('success'),
 
-            Stat::make('Tournament Income', 'KES '.number_format($tournamentIncome, 2))
+            Stat::make('Tournament Income', 'KES '.number_format((float) ($income['tournaments'] ?? 0), 2))
                 ->description('All-time (10% house cut)')
+                ->descriptionIcon('heroicon-m-trophy')
                 ->color('info'),
 
-            Stat::make('Jackpot Income', 'KES '.number_format($jackpotIncome, 2))
+            Stat::make('Jackpot Income', 'KES '.number_format((float) ($income['jackpots'] ?? 0), 2))
                 ->description('All-time (10% house cut)')
+                ->descriptionIcon('heroicon-m-sparkles')
                 ->color('warning'),
-
-            Stat::make('Robot Games Total', number_format($totalRobotGames))
-                ->description("Today: {$todayRobotGames} · This week: {$weekRobotGames}")
-                ->color('gray'),
         ];
     }
 }

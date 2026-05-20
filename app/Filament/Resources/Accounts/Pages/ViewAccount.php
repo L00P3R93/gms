@@ -4,9 +4,16 @@ namespace App\Filament\Resources\Accounts\Pages;
 
 use App\Filament\Resources\Accounts\AccountResource;
 use App\Models\Account;
-use App\Models\PlayedGame;
 use App\Services\GameApiService;
+use App\Support\Format;
+use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\RepeatableEntry\TableColumn;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Pages\Page;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
+use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Cache;
 
 class ViewAccount extends Page
@@ -15,7 +22,7 @@ class ViewAccount extends Page
 
     protected string $view = 'filament.resources.accounts.pages.view-account';
 
-    public string $activeTab = 'single_games';
+    public int $customerId = 0;
 
     public array $singleGames = [];
 
@@ -29,9 +36,6 @@ class ViewAccount extends Page
 
     public array $purchases = [];
 
-    /** @var array<int|string, string> */
-    public array $winnerNames = [];
-
     public ?array $walletInfo = null;
 
     public ?array $apiCustomer = null;
@@ -40,53 +44,13 @@ class ViewAccount extends Page
 
     public function mount(int|string $record): void
     {
-        $this->record = Account::findOrFail($record);
-        $this->loadLocalGames();
+        $this->customerId = (int) $record;
         $this->loadApiData();
-    }
-
-    private function loadLocalGames(): void
-    {
-        $id = $this->record->id;
-
-        $playerFilter = fn ($q) => $q->where('player_1', $id)
-            ->orWhere('player_2', $id)
-            ->orWhere('player_3', $id)
-            ->orWhere('player_4', $id)
-            ->orWhere('player_5', $id)
-            ->orWhere('player_6', $id);
-
-        $this->singleGames = PlayedGame::whereIn('match_type', [
-            PlayedGame::TYPE_MULTI_2,
-            PlayedGame::TYPE_MULTI_3,
-            PlayedGame::TYPE_MULTI_4,
-        ])->where($playerFilter)->orderByDesc('time')->get()->toArray();
-
-        $this->tournamentGames = PlayedGame::where('match_type', PlayedGame::TYPE_TOURNAMENT)
-            ->where($playerFilter)->orderByDesc('time')->get()->toArray();
-
-        $this->jackpotGames = PlayedGame::where('match_type', PlayedGame::TYPE_JACKPOT)
-            ->where($playerFilter)->orderByDesc('time')->get()->toArray();
-
-        $allWinnerIds = collect($this->singleGames)
-            ->merge($this->tournamentGames)
-            ->merge($this->jackpotGames)
-            ->pluck('winner')
-            ->filter()
-            ->unique()
-            ->values()
-            ->toArray();
-
-        if ($allWinnerIds) {
-            $this->winnerNames = Account::whereIn('id', $allWinnerIds)
-                ->pluck('name', 'id')
-                ->toArray();
-        }
     }
 
     private function loadApiData(): void
     {
-        $customerId = $this->record->id;
+        $customerId = $this->customerId;
         $gameApi = app(GameApiService::class);
 
         $anyFailed = false;
@@ -116,6 +80,22 @@ class ViewAccount extends Page
         }
 
         try {
+            $gamesPlayed = Cache::remember(
+                "api_games_played_{$customerId}",
+                300,
+                fn () => $gameApi->getCustomerGamesPlayed($customerId)
+            );
+            $this->singleGames = $gamesPlayed['single_games'] ?? [];
+            $this->tournamentGames = $gamesPlayed['tournament_games'] ?? [];
+            $this->jackpotGames = $gamesPlayed['jackpot_games'] ?? [];
+        } catch (\Throwable) {
+            $anyFailed = true;
+            $this->singleGames = [];
+            $this->tournamentGames = [];
+            $this->jackpotGames = [];
+        }
+
+        try {
             $txResponse = Cache::remember(
                 "api_transactions_{$customerId}",
                 300,
@@ -142,5 +122,252 @@ class ViewAccount extends Page
         }
 
         $this->apiUnavailable = $anyFailed;
+    }
+
+    public function playerInfolist(Schema $schema): Schema
+    {
+        return $schema
+            ->state($this->infolistState())
+            ->components([
+                Section::make('Identity')
+                    ->icon('heroicon-o-identification')
+                    ->columns(3)
+                    ->schema([
+                        TextEntry::make('name')
+                            ->label('Name')
+                            ->placeholder('—'),
+                        TextEntry::make('phone_no')
+                            ->label('Phone')
+                            ->copyable()
+                            ->placeholder('—'),
+                        TextEntry::make('email')
+                            ->label('Email')
+                            ->copyable()
+                            ->placeholder('—'),
+                        TextEntry::make('status')
+                            ->label('Status')
+                            ->badge()
+                            ->formatStateUsing(fn ($state): string => (int) $state === Account::STATUS_ACTIVE ? 'Active' : 'Hidden')
+                            ->color(fn ($state): string => (int) $state === Account::STATUS_ACTIVE ? 'success' : 'gray'),
+                        TextEntry::make('current_vip')
+                            ->label('VIP Tier')
+                            ->badge()
+                            ->color('info')
+                            ->placeholder('—'),
+                    ]),
+
+                Section::make('Wallet')
+                    ->icon('heroicon-o-wallet')
+                    ->columns(3)
+                    ->schema([
+                        TextEntry::make('balance')
+                            ->label('Wallet Balance')
+                            ->formatStateUsing(fn ($state): string => Format::money($state)),
+                        TextEntry::make('coins')
+                            ->label('VCoins')
+                            ->numeric(),
+                        TextEntry::make('credits')
+                            ->label('Game Credits')
+                            ->numeric(),
+                        TextEntry::make('wallet_deposits')
+                            ->label('Lifetime Deposits')
+                            ->formatStateUsing(fn ($state): string => Format::money($state)),
+                        TextEntry::make('wallet_withdraws')
+                            ->label('Lifetime Withdrawals')
+                            ->formatStateUsing(fn ($state): string => Format::money($state)),
+                    ]),
+
+                Tabs::make('Activity')
+                    ->columnSpanFull()
+                    ->tabs([
+                        Tab::make('Single Games')
+                            ->badge(count($this->singleGames))
+                            ->schema([
+                                RepeatableEntry::make('single_games')
+                                    ->hiddenLabel()
+                                    ->placeholder('No single games found.')
+                                    ->table([
+                                        TableColumn::make('Game ID'),
+                                        TableColumn::make('Type'),
+                                        TableColumn::make('Bet'),
+                                        TableColumn::make('Result'),
+                                        TableColumn::make('Date'),
+                                    ])
+                                    ->schema([
+                                        TextEntry::make('game_id')->placeholder('—'),
+                                        TextEntry::make('game_type')->placeholder('—'),
+                                        TextEntry::make('amount')
+                                            ->formatStateUsing(fn ($state): string => Format::money($state)),
+                                        TextEntry::make('payment_type')
+                                            ->badge()
+                                            ->formatStateUsing(fn ($state): string => $state === 'win' ? 'Won' : 'Lost')
+                                            ->color(fn ($state): string => $state === 'win' ? 'success' : 'danger'),
+                                        TextEntry::make('created_at')
+                                            ->formatStateUsing(fn ($state): string => Format::dateTime($state)),
+                                    ]),
+                            ]),
+
+                        Tab::make('Tournaments')
+                            ->badge(count($this->tournamentGames))
+                            ->schema([
+                                RepeatableEntry::make('tournament_games')
+                                    ->hiddenLabel()
+                                    ->placeholder('No tournament games found.')
+                                    ->table([
+                                        TableColumn::make('Competition ID'),
+                                        TableColumn::make('Amount'),
+                                        TableColumn::make('Level'),
+                                        TableColumn::make('Type'),
+                                        TableColumn::make('Date'),
+                                    ])
+                                    ->schema($this->competitionRowSchema()),
+                            ]),
+
+                        Tab::make('Jackpots')
+                            ->badge(count($this->jackpotGames))
+                            ->schema([
+                                RepeatableEntry::make('jackpot_games')
+                                    ->hiddenLabel()
+                                    ->placeholder('No jackpot games found.')
+                                    ->table([
+                                        TableColumn::make('Competition ID'),
+                                        TableColumn::make('Amount'),
+                                        TableColumn::make('Level'),
+                                        TableColumn::make('Type'),
+                                        TableColumn::make('Date'),
+                                    ])
+                                    ->schema($this->competitionRowSchema()),
+                            ]),
+
+                        Tab::make('Deposits')
+                            ->badge(count($this->deposits))
+                            ->schema([
+                                RepeatableEntry::make('deposit_txns')
+                                    ->hiddenLabel()
+                                    ->placeholder('No deposit records available.')
+                                    ->table([
+                                        TableColumn::make('Transaction ID'),
+                                        TableColumn::make('Amount'),
+                                        TableColumn::make('Date'),
+                                    ])
+                                    ->schema($this->transactionRowSchema()),
+                            ]),
+
+                        Tab::make('Withdrawals')
+                            ->badge(count($this->withdrawals))
+                            ->schema([
+                                RepeatableEntry::make('withdrawal_txns')
+                                    ->hiddenLabel()
+                                    ->placeholder('No withdrawal records available.')
+                                    ->table([
+                                        TableColumn::make('Transaction ID'),
+                                        TableColumn::make('Amount'),
+                                        TableColumn::make('Date'),
+                                    ])
+                                    ->schema($this->transactionRowSchema()),
+                            ]),
+
+                        Tab::make('Purchases')
+                            ->badge(count($this->purchases))
+                            ->schema([
+                                RepeatableEntry::make('purchase_txns')
+                                    ->hiddenLabel()
+                                    ->placeholder('No purchase records available.')
+                                    ->table([
+                                        TableColumn::make('Type'),
+                                        TableColumn::make('Amount'),
+                                        TableColumn::make('Value'),
+                                        TableColumn::make('Date'),
+                                    ])
+                                    ->schema([
+                                        TextEntry::make('type')->placeholder('—'),
+                                        TextEntry::make('amount')
+                                            ->formatStateUsing(fn ($state): string => Format::money($state)),
+                                        TextEntry::make('value')->placeholder('—'),
+                                        TextEntry::make('date')
+                                            ->formatStateUsing(fn ($state): string => Format::dateTime($state)),
+                                    ]),
+                            ]),
+                    ]),
+            ]);
+    }
+
+    /**
+     * Row schema shared by the tournament and jackpot tables.
+     *
+     * @return array<int, TextEntry>
+     */
+    private function competitionRowSchema(): array
+    {
+        return [
+            TextEntry::make('competition_id')->placeholder('—'),
+            TextEntry::make('amount')
+                ->formatStateUsing(fn ($state): string => Format::money($state)),
+            TextEntry::make('level')->placeholder('—'),
+            TextEntry::make('payment_type')
+                ->badge()
+                ->formatStateUsing(fn ($state): string => ucfirst((string) ($state ?? '—')))
+                ->color(fn ($state): string => match ($state) {
+                    'win' => 'success',
+                    'deposit' => 'info',
+                    default => 'gray',
+                }),
+            TextEntry::make('created_at')
+                ->formatStateUsing(fn ($state): string => Format::dateTime($state)),
+        ];
+    }
+
+    /**
+     * Row schema shared by the deposit and withdrawal tables.
+     *
+     * @return array<int, TextEntry>
+     */
+    private function transactionRowSchema(): array
+    {
+        return [
+            TextEntry::make('transaction_id')->placeholder('—'),
+            TextEntry::make('amount')
+                ->formatStateUsing(fn ($state): string => Format::money($state)),
+            TextEntry::make('date')
+                ->formatStateUsing(fn ($state): string => Format::dateTime($state)),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function infolistState(): array
+    {
+        return [
+            'name' => $this->apiCustomer['name'] ?? null,
+            'phone_no' => $this->apiCustomer['phone_no'] ?? null,
+            'email' => $this->apiCustomer['email'] ?? null,
+            'status' => $this->apiCustomer['status'] ?? Account::STATUS_ACTIVE,
+            'current_vip' => $this->apiCustomer['current_vip'] ?? null,
+            'credits' => $this->apiCustomer['credits'] ?? 0,
+            'balance' => $this->walletInfo['balance'] ?? 0,
+            'coins' => $this->walletInfo['coins'] ?? 0,
+            'wallet_deposits' => $this->walletInfo['deposits'] ?? 0,
+            'wallet_withdraws' => $this->walletInfo['withdraws'] ?? 0,
+            'single_games' => $this->singleGames,
+            'tournament_games' => $this->tournamentGames,
+            'jackpot_games' => $this->jackpotGames,
+            'deposit_txns' => array_map($this->normalizeTransaction(...), $this->deposits),
+            'withdrawal_txns' => array_map($this->normalizeTransaction(...), $this->withdrawals),
+            'purchase_txns' => $this->purchases,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $transaction
+     * @return array<string, mixed>
+     */
+    private function normalizeTransaction(array $transaction): array
+    {
+        return [
+            'transaction_id' => $transaction['transaction_id'] ?? $transaction['id'] ?? null,
+            'amount' => $transaction['amount'] ?? 0,
+            'date' => $transaction['date'] ?? $transaction['created_at'] ?? null,
+        ];
     }
 }

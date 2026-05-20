@@ -3,9 +3,8 @@
 use App\Enums\UserStatus;
 use App\Filament\Pages\PayslipPage;
 use App\Filament\Resources\Accounts\Pages\ViewAccount;
-use App\Models\Account;
-use App\Models\PlayedGame;
 use App\Models\User;
+use App\Services\GameApiService;
 use Livewire\Livewire;
 
 use function Pest\Laravel\get;
@@ -18,88 +17,55 @@ beforeEach(function (): void {
 
     $this->agent = User::factory()->create(['status' => UserStatus::Active->value]);
     $this->agent->assignRole('agent');
-
-    $this->account = Account::create([
-        'name' => 'Test Player',
-        'phone' => '0712000001',
-        'email' => 'player@test.com',
-        'password' => 'hashed',
-        'game_status' => 1,
-        'credit' => 500,
-        'vcoins' => 100,
-    ]);
 });
 
 // --- ViewAccount ---
 
-it('loads the ViewAccount page for a valid account', function (): void {
+it('loads the ViewAccount page for a valid account ID', function (): void {
+    $this->mock(GameApiService::class)
+        ->shouldReceive('getCustomer')->andReturn(['id' => 1, 'name' => 'Test', 'status' => 1])
+        ->shouldReceive('getCustomerGamesPlayed')->andReturn(['single_games' => [], 'tournament_games' => [], 'jackpot_games' => []])
+        ->shouldReceive('getCustomerTransactions')->andReturn(['transactions' => []])
+        ->shouldReceive('getCustomerPurchases')->andReturn([]);
+
     $this->actingAs($this->admin);
 
-    Livewire::test(ViewAccount::class, ['record' => $this->account->id])
-        ->assertSet('activeTab', 'single_games')
+    Livewire::test(ViewAccount::class, ['record' => 1])
+        ->assertOk()
         ->assertCount('singleGames', 0);
 });
 
-it('single games tab shows Won for the current player when they are the winner', function (): void {
-    $id = $this->account->id;
-
-    PlayedGame::create([
-        'match_name' => 'game-won',
-        'match_type' => PlayedGame::TYPE_MULTI_2,
-        'player_1' => (string) $id,
-        'player_2' => '999',
-        'amount' => 100,
-        'winner' => (string) $id,
-    ]);
-
-    PlayedGame::create([
-        'match_name' => 'game-lost',
-        'match_type' => PlayedGame::TYPE_MULTI_2,
-        'player_1' => (string) $id,
-        'player_2' => '999',
-        'amount' => 50,
-        'winner' => '999',
-    ]);
+it('single games tab shows data from API response', function (): void {
+    $this->mock(GameApiService::class)
+        ->shouldReceive('getCustomer')->andReturn(['id' => 1, 'name' => 'Test', 'status' => 1])
+        ->shouldReceive('getCustomerGamesPlayed')->andReturn([
+            'single_games' => [
+                ['game_id' => 'G1', 'game_type' => 2, 'amount' => 100, 'payment_type' => 'win', 'created_at' => now()->toDateTimeString()],
+                ['game_id' => 'G2', 'game_type' => 2, 'amount' => 50, 'payment_type' => 'deposit', 'created_at' => now()->toDateTimeString()],
+            ],
+            'tournament_games' => [],
+            'jackpot_games' => [],
+        ])
+        ->shouldReceive('getCustomerTransactions')->andReturn(['transactions' => []])
+        ->shouldReceive('getCustomerPurchases')->andReturn([]);
 
     $this->actingAs($this->admin);
 
-    Livewire::test(ViewAccount::class, ['record' => $id])
-        ->assertSet('activeTab', 'single_games')
+    Livewire::test(ViewAccount::class, ['record' => 1])
         ->assertCount('singleGames', 2);
 });
 
-it('tournament tab loads games for all 6 player columns', function (): void {
-    $id = $this->account->id;
-
-    PlayedGame::create([
-        'match_name' => 'TN-001',
-        'match_type' => PlayedGame::TYPE_TOURNAMENT,
-        'player_5' => (string) $id,
-        'amount' => 200,
-        'winner' => '999',
-    ]);
+it('ViewAccount sets apiUnavailable when API throws', function (): void {
+    $this->mock(GameApiService::class)
+        ->shouldReceive('getCustomer')->andThrow(new RuntimeException('API down'))
+        ->shouldReceive('getCustomerGamesPlayed')->andThrow(new RuntimeException('API down'))
+        ->shouldReceive('getCustomerTransactions')->andThrow(new RuntimeException('API down'))
+        ->shouldReceive('getCustomerPurchases')->andThrow(new RuntimeException('API down'));
 
     $this->actingAs($this->admin);
 
-    Livewire::test(ViewAccount::class, ['record' => $id])
-        ->assertCount('tournamentGames', 1);
-});
-
-it('jackpot tab loads JP games for the player', function (): void {
-    $id = $this->account->id;
-
-    PlayedGame::create([
-        'match_name' => 'JP-GOLD-001',
-        'match_type' => PlayedGame::TYPE_JACKPOT,
-        'player_3' => (string) $id,
-        'amount' => 500,
-        'winner' => '999',
-    ]);
-
-    $this->actingAs($this->admin);
-
-    Livewire::test(ViewAccount::class, ['record' => $id])
-        ->assertCount('jackpotGames', 1);
+    Livewire::test(ViewAccount::class, ['record' => 99])
+        ->assertSet('apiUnavailable', true);
 });
 
 // --- PayslipPage access ---
@@ -127,16 +93,24 @@ it('getPlayerData returns null when no account selected', function (): void {
         ->assertReturned(null);
 });
 
-it('getPlayerData returns correct win/loss stats', function (): void {
-    $id = $this->account->id;
-
-    PlayedGame::create(['match_name' => 'g1', 'match_type' => PlayedGame::TYPE_MULTI_2, 'player_1' => (string) $id, 'player_2' => '999', 'amount' => 100, 'winner' => (string) $id]);
-    PlayedGame::create(['match_name' => 'g2', 'match_type' => PlayedGame::TYPE_MULTI_3, 'player_1' => (string) $id, 'player_2' => '999', 'player_3' => '998', 'amount' => 100, 'winner' => '999']);
+it('getPlayerData returns correct win/loss stats from API', function (): void {
+    $this->mock(GameApiService::class)
+        ->shouldReceive('getCustomer')->andReturn(['id' => 1, 'name' => 'Test Player'])
+        ->shouldReceive('getCustomerTransactions')->andReturn(['transactions' => []])
+        ->shouldReceive('getCustomerPurchases')->andReturn([])
+        ->shouldReceive('getCustomerGamesPlayed')->andReturn([
+            'single_games' => [
+                ['payment_type' => 'win', 'amount' => 100],
+                ['payment_type' => 'deposit', 'amount' => 100],
+            ],
+            'tournament_games' => [],
+            'jackpot_games' => [],
+        ]);
 
     $this->actingAs($this->admin);
 
     $component = Livewire::test(PayslipPage::class)
-        ->set('selectedAccountId', $id);
+        ->set('selectedAccountId', 1);
 
     $data = $component->instance()->getPlayerData();
 

@@ -3,80 +3,85 @@
 namespace App\Filament\Pages;
 
 use App\Services\GameApiService;
-use App\Traits\SuperAdminAccess;
+use App\Support\ApiTablePaginator;
+use App\Support\Format;
 use BackedEnum;
-use Filament\Pages\Page;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
-use UnitEnum;
 
-class CompetitionLeaderboard extends Page implements HasTable
+class CompetitionLeaderboard extends BaseReportPage implements HasTable
 {
     use InteractsWithTable;
-    use SuperAdminAccess;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-chart-bar';
 
     protected static ?string $navigationLabel = 'Competition Leaderboard';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Reports';
-
     protected static ?int $navigationSort = 1;
 
     protected string $view = 'filament.pages.competition-leaderboard';
 
-    public bool $apiError = false;
-
-    public static function canAccess(): bool
-    {
-        return static::canViewAny();
-    }
-
     public function table(Table $table): Table
     {
         return $table
-            ->records(function (int $page, int $recordsPerPage): LengthAwarePaginator {
-                try {
-                    $response = Cache::remember('api_competition_leaderboard', 300, fn () => app(GameApiService::class)->getCombinedLeaderboard());
-
-                    $data = collect($response['data'] ?? $response['competitions_leaderboard'] ?? (is_array($response) && ! isset($response['status']) ? $response : []))
-                        ->values()
-                        ->toArray();
-
-                    $this->apiError = false;
-                } catch (\Throwable) {
-                    $this->apiError = true;
-                    $data = [];
-                }
-
-                $collection = collect($data);
-
-                return new LengthAwarePaginator(
-                    $collection->forPage($page, $recordsPerPage)->values()->toArray(),
-                    $collection->count(),
-                    $recordsPerPage,
-                    $page,
-                );
-            })
+            ->records(fn (int|string $page, int|string $recordsPerPage, ?string $search, ?string $sortColumn, ?string $sortDirection): LengthAwarePaginator => ApiTablePaginator::make(
+                response: $this->fetchRecords(),
+                page: $page,
+                perPage: $recordsPerPage,
+                search: $search,
+                searchKeys: ['name'],
+                sortColumn: $sortColumn,
+                sortDirection: $sortDirection,
+            ))
             ->columns([
                 TextColumn::make('name')
-                    ->label('Player Name'),
-                TextColumn::make('phone')
-                    ->label('Phone')
-                    ->formatStateUsing(fn ($state) => $state ? '****'.substr((string) $state, -4) : '—'),
+                    ->label('Player Name')
+                    ->searchable()
+                    ->sortable(),
                 TextColumn::make('wins')
-                    ->label('Wins')
-                    ->formatStateUsing(fn ($state) => number_format((int) ($state ?? 0))),
-                TextColumn::make('total_winnings')
                     ->label('Total Winnings')
-                    ->formatStateUsing(fn ($state) => 'KES '.number_format((float) ($state ?? 0), 2)),
+                    ->sortable()
+                    ->formatStateUsing(fn ($state): string => Format::money($state)),
             ])
-            ->emptyStateHeading('No leaderboard data')
-            ->emptyStateDescription($this->apiError ? 'Could not load leaderboard from the API.' : 'No competition data for the current week.')
+            ->emptyStateIcon('heroicon-o-chart-bar')
+            ->emptyStateHeading(fn (): string => $this->apiError ? 'Leaderboard unavailable' : 'No leaderboard data')
+            ->emptyStateDescription(fn (): string => $this->apiError
+                ? 'The wallet API could not be reached. Refresh the page to try again.'
+                : 'No competition data for the selected period.')
             ->striped();
+    }
+
+    /**
+     * @return array<int|string, mixed>
+     */
+    protected function fetchRecords(): array
+    {
+        [$start, $end] = $this->dateRange();
+        $start ??= '2000-01-01';
+        $end ??= now()->toDateString();
+
+        try {
+            $response = Cache::remember(
+                "competition_leaderboard_{$start}_{$end}",
+                300,
+                fn (): array => app(GameApiService::class)->getLeaderboard($start, $end),
+            );
+            $this->apiError = false;
+
+            return $response['competitions_leaderboard'] ?? $response['data'] ?? [];
+        } catch (\Throwable) {
+            $this->apiError = true;
+
+            return [];
+        }
+    }
+
+    protected function onFilterApplied(): void
+    {
+        $this->resetTable();
     }
 }

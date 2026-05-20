@@ -3,6 +3,8 @@
 namespace App\Filament\Pages;
 
 use App\Services\GameApiService;
+use App\Support\ApiTablePaginator;
+use App\Support\Format;
 use App\Traits\SuperAdminAccess;
 use BackedEnum;
 use Filament\Pages\Page;
@@ -39,46 +41,59 @@ class TournamentAwardsPage extends Page implements HasTable
     public function table(Table $table): Table
     {
         return $table
-            ->records(function (int $page, int $recordsPerPage): LengthAwarePaginator {
-                try {
-                    $data = Cache::remember('api_tournament_awards', 300, fn () => collect(
-                        app(GameApiService::class)->getCompetitionAwards(1)
-                    )->values()->toArray());
-
-                    $this->apiError = false;
-                } catch (\Throwable) {
-                    $this->apiError = true;
-                    $data = [];
-                }
-
-                $collection = collect($data);
-
-                return new LengthAwarePaginator(
-                    $collection->forPage($page, $recordsPerPage)->values()->toArray(),
-                    $collection->count(),
-                    $recordsPerPage,
-                    $page,
-                );
-            })
+            ->records(fn (int|string $page, int|string $recordsPerPage, ?string $search, ?string $sortColumn, ?string $sortDirection): LengthAwarePaginator => ApiTablePaginator::make(
+                response: $this->fetchRecords(),
+                page: $page,
+                perPage: $recordsPerPage,
+                search: $search,
+                searchKeys: ['competition_id', 'name'],
+                sortColumn: $sortColumn,
+                sortDirection: $sortDirection,
+            ))
             ->columns([
                 TextColumn::make('competition_id')
                     ->label('Competition ID')
                     ->searchable(),
                 TextColumn::make('name')
-                    ->label('Winner'),
+                    ->label('Winner')
+                    ->searchable(),
                 TextColumn::make('amount')
                     ->label('Prize Amount')
-                    ->formatStateUsing(fn ($state) => 'KES '.number_format((float) ($state ?? 0), 2)),
+                    ->sortable()
+                    ->formatStateUsing(fn ($state): string => Format::money($state)),
                 TextColumn::make('income')
                     ->label('House Income')
-                    ->formatStateUsing(fn ($state) => 'KES '.number_format((float) ($state ?? 0), 2)),
+                    ->sortable()
+                    ->formatStateUsing(fn ($state): string => Format::money($state)),
                 TextColumn::make('created_at')
                     ->label('Date')
-                    ->dateTime(),
+                    ->sortable()
+                    ->formatStateUsing(fn ($state): string => Format::dateTime($state)),
             ])
-            ->emptyStateHeading('No tournament awards found')
-            ->emptyStateDescription($this->apiError ? 'Could not load data from the API.' : 'No tournament awards have been recorded yet.')
-            ->striped()
-            ->defaultSort('created_at', 'desc');
+            ->defaultSort('created_at', 'desc')
+            ->emptyStateIcon('heroicon-o-trophy')
+            ->emptyStateHeading(fn (): string => $this->apiError ? 'Tournament awards unavailable' : 'No tournament awards found')
+            ->emptyStateDescription(fn (): string => $this->apiError
+                ? 'The wallet API could not be reached. Refresh the page to try again.'
+                : 'No tournament awards have been recorded yet.')
+            ->striped();
+    }
+
+    /**
+     * @return array<int|string, mixed>
+     */
+    protected function fetchRecords(): array
+    {
+        try {
+            // gameType 1 = Tournament
+            $records = Cache::remember('api_tournament_awards', 300, fn (): array => app(GameApiService::class)->getCompetitionAwards(1));
+            $this->apiError = false;
+
+            return $records;
+        } catch (\Throwable) {
+            $this->apiError = true;
+
+            return [];
+        }
     }
 }

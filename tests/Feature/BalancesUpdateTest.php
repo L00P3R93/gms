@@ -30,7 +30,7 @@ it('skips distribution when no new mpesa income', function () {
     ]);
 
     $gameApi = Mockery::mock(GameApiService::class);
-    $gameApi->shouldReceive('getB2CBalance')->once()->andReturn(10000.0);
+    $gameApi->shouldReceive('getB2CBalanceAmount')->once()->andReturn(10000.0);
     $gameApi->shouldReceive('getPurchasesByReferral')->never();
 
     $this->app->instance(GameApiService::class, $gameApi);
@@ -62,7 +62,7 @@ it('distributes 40/60 split on new mpesa income', function () {
     HolderWallet::create(['holder_id' => $holder->id, 'balance' => 0]);
 
     $gameApi = Mockery::mock(GameApiService::class);
-    $gameApi->shouldReceive('getB2CBalance')->once()->andReturn(1000.0);
+    $gameApi->shouldReceive('getB2CBalanceAmount')->once()->andReturn(1000.0);
     $gameApi->shouldReceive('getPurchasesByReferral')->andReturn([]);
 
     $this->app->instance(GameApiService::class, $gameApi);
@@ -84,7 +84,7 @@ it('deducts referral commission from company share', function () {
     HolderWallet::create(['holder_id' => $holder->id, 'balance' => 0]);
 
     $gameApi = Mockery::mock(GameApiService::class);
-    $gameApi->shouldReceive('getB2CBalance')->once()->andReturn(1000.0);
+    $gameApi->shouldReceive('getB2CBalanceAmount')->once()->andReturn(1000.0);
     // Referral purchases went from 0 → 200, so 10% commission = 20
     $gameApi->shouldReceive('getPurchasesByReferral')->andReturn([['amount' => 200]]);
 
@@ -101,7 +101,7 @@ it('deducts referral commission from company share', function () {
 
 it('dry run commits nothing', function () {
     $gameApi = Mockery::mock(GameApiService::class);
-    $gameApi->shouldReceive('getB2CBalance')->once()->andReturn(5000.0);
+    $gameApi->shouldReceive('getB2CBalanceAmount')->once()->andReturn(5000.0);
     $gameApi->shouldReceive('getPurchasesByReferral')->andReturn([]);
 
     $this->app->instance(GameApiService::class, $gameApi);
@@ -115,7 +115,7 @@ it('dry run commits nothing', function () {
 
 it('rolls back on failure', function () {
     $gameApi = Mockery::mock(GameApiService::class);
-    $gameApi->shouldReceive('getB2CBalance')->andThrow(new Exception('API down'));
+    $gameApi->shouldReceive('getB2CBalanceAmount')->andThrow(new Exception('API down'));
 
     $this->app->instance(GameApiService::class, $gameApi);
 

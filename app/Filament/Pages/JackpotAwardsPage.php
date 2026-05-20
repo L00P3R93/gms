@@ -3,6 +3,8 @@
 namespace App\Filament\Pages;
 
 use App\Services\GameApiService;
+use App\Support\ApiTablePaginator;
+use App\Support\Format;
 use App\Traits\SuperAdminAccess;
 use BackedEnum;
 use Filament\Pages\Page;
@@ -39,43 +41,32 @@ class JackpotAwardsPage extends Page implements HasTable
     public function table(Table $table): Table
     {
         return $table
-            ->records(function (int $page, int $recordsPerPage): LengthAwarePaginator {
-                try {
-                    $data = Cache::remember('api_jackpot_awards', 300, fn () => collect(
-                        app(GameApiService::class)->getCompetitionAwards(2)
-                    )->values()->toArray());
-
-                    $this->apiError = false;
-                } catch (\Throwable) {
-                    $this->apiError = true;
-                    $data = [];
-                }
-
-                $collection = collect($data);
-
-                return new LengthAwarePaginator(
-                    $collection->forPage($page, $recordsPerPage)->values()->toArray(),
-                    $collection->count(),
-                    $recordsPerPage,
-                    $page,
-                );
-            })
+            ->records(fn (int|string $page, int|string $recordsPerPage, ?string $search, ?string $sortColumn, ?string $sortDirection): LengthAwarePaginator => ApiTablePaginator::make(
+                response: $this->fetchRecords(),
+                page: $page,
+                perPage: $recordsPerPage,
+                search: $search,
+                searchKeys: ['competition_id', 'name'],
+                sortColumn: $sortColumn,
+                sortDirection: $sortDirection,
+            ))
             ->columns([
                 TextColumn::make('competition_id')
                     ->label('Competition ID')
                     ->searchable(),
                 TextColumn::make('name')
-                    ->label('Winner'),
+                    ->label('Winner')
+                    ->searchable(),
                 TextColumn::make('jp_rounds')
                     ->label('Tier')
                     ->badge()
-                    ->formatStateUsing(fn ($state) => match ((int) $state) {
+                    ->formatStateUsing(fn ($state): string => match ((int) $state) {
                         21 => 'Gold (21)',
                         17 => 'Silver (17)',
                         13 => 'Bronze (13)',
                         default => (string) ($state ?? '—'),
                     })
-                    ->color(fn ($state) => match ((int) $state) {
+                    ->color(fn ($state): string => match ((int) $state) {
                         21 => 'warning',
                         17 => 'gray',
                         13 => 'danger',
@@ -83,17 +74,41 @@ class JackpotAwardsPage extends Page implements HasTable
                     }),
                 TextColumn::make('amount')
                     ->label('Prize Amount')
-                    ->formatStateUsing(fn ($state) => 'KES '.number_format((float) ($state ?? 0), 2)),
+                    ->sortable()
+                    ->formatStateUsing(fn ($state): string => Format::money($state)),
                 TextColumn::make('income')
                     ->label('House Income')
-                    ->formatStateUsing(fn ($state) => 'KES '.number_format((float) ($state ?? 0), 2)),
+                    ->sortable()
+                    ->formatStateUsing(fn ($state): string => Format::money($state)),
                 TextColumn::make('created_at')
                     ->label('Date')
-                    ->dateTime(),
+                    ->sortable()
+                    ->formatStateUsing(fn ($state): string => Format::dateTime($state)),
             ])
-            ->emptyStateHeading('No jackpot awards found')
-            ->emptyStateDescription($this->apiError ? 'Could not load data from the API.' : 'No jackpot awards have been recorded yet.')
-            ->striped()
-            ->defaultSort('created_at', 'desc');
+            ->defaultSort('created_at', 'desc')
+            ->emptyStateIcon('heroicon-o-star')
+            ->emptyStateHeading(fn (): string => $this->apiError ? 'Jackpot awards unavailable' : 'No jackpot awards found')
+            ->emptyStateDescription(fn (): string => $this->apiError
+                ? 'The wallet API could not be reached. Refresh the page to try again.'
+                : 'No jackpot awards have been recorded yet.')
+            ->striped();
+    }
+
+    /**
+     * @return array<int|string, mixed>
+     */
+    protected function fetchRecords(): array
+    {
+        try {
+            // gameType 2 = Jackpot
+            $records = Cache::remember('api_jackpot_awards', 300, fn (): array => app(GameApiService::class)->getCompetitionAwards(2));
+            $this->apiError = false;
+
+            return $records;
+        } catch (\Throwable) {
+            $this->apiError = true;
+
+            return [];
+        }
     }
 }

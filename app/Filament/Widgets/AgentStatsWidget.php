@@ -13,7 +13,8 @@ class AgentStatsWidget extends BaseWidget
 
     public static function canView(): bool
     {
-        return auth()->user()?->hasRole('agent') ?? false;
+        // return auth()->user()?->hasRole('agent') ?? false;
+        return false;
     }
 
     protected function getStats(): array

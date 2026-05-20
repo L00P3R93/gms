@@ -2,74 +2,120 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Pages\Widgets\IncomeSummaryWidget;
 use App\Services\GameApiService;
-use App\Traits\SuperAdminAccess;
+use App\Support\Format;
 use BackedEnum;
-use Filament\Pages\Page;
+use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\RepeatableEntry\TableColumn;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Cache;
-use UnitEnum;
 
-class GameIncomeReport extends Page
+class GameIncomeReport extends BaseReportPage
 {
-    use SuperAdminAccess;
-
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-document-chart-bar';
 
     protected static ?string $navigationLabel = 'Income Report';
-
-    protected static string|UnitEnum|null $navigationGroup = 'Reports';
 
     protected static ?int $navigationSort = 3;
 
     protected string $view = 'filament.pages.game-income-report';
 
-    public string $period = 'today';
+    /**
+     * Per-request memo so the report is built once even though the widget,
+     * infolist, and page all read it.
+     *
+     * @var array<string, mixed>|null
+     */
+    protected ?array $cachedReport = null;
 
-    public ?string $customStart = null;
-
-    public ?string $customEnd = null;
-
-    public bool $apiError = false;
-
-    public static function canAccess(): bool
-    {
-        return static::canViewAny();
-    }
-
-    public function getPeriodOptions(): array
+    /**
+     * @return array<int, class-string>
+     */
+    protected function getHeaderWidgets(): array
     {
         return [
-            'today' => 'Today',
-            'yesterday' => 'Yesterday',
-            'this_week' => 'This Week',
-            'last_week' => 'Last Week',
-            'this_month' => 'This Month',
-            'last_month' => 'Last Month',
-            'this_year' => 'This Year',
-            'all_time' => 'All Time',
-            'custom' => 'Custom Range',
+            IncomeSummaryWidget::class,
         ];
     }
 
-    protected function getDateRange(): array
+    /**
+     * @return array<string, mixed>
+     */
+    public function getWidgetData(): array
     {
-        return match ($this->period) {
-            'today' => [today()->toDateString(), today()->toDateString()],
-            'yesterday' => [today()->subDay()->toDateString(), today()->subDay()->toDateString()],
-            'this_week' => [now()->startOfWeek()->toDateString(), now()->endOfWeek()->toDateString()],
-            'last_week' => [now()->subWeek()->startOfWeek()->toDateString(), now()->subWeek()->endOfWeek()->toDateString()],
-            'this_month' => [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()],
-            'last_month' => [now()->subMonth()->startOfMonth()->toDateString(), now()->subMonth()->endOfMonth()->toDateString()],
-            'this_year' => [now()->startOfYear()->toDateString(), now()->endOfYear()->toDateString()],
-            'all_time' => [null, null],
-            'custom' => [$this->customStart ?? now()->startOfMonth()->toDateString(), $this->customEnd ?? now()->toDateString()],
-            default => [today()->toDateString(), today()->toDateString()],
-        };
+        return [
+            'summary' => $this->getReportData()['totals'],
+        ];
     }
 
+    /**
+     * Income breakdown grouped by game category. The structural shape is shared
+     * by the summary widget and the breakdown infolist below.
+     *
+     * @return array{
+     *     singles: array<int, mixed>,
+     *     tournaments: array<int, mixed>,
+     *     jackpots: array<int, mixed>,
+     *     totals: array{singles_income: float, tournament_income: float, jackpot_income: float, grand_total: float}
+     * }
+     */
     public function getReportData(): array
     {
-        [$start, $end] = $this->getDateRange();
+        return $this->cachedReport ??= $this->buildReportData();
+    }
+
+    public function reportInfolist(Schema $schema): Schema
+    {
+        $data = $this->getReportData();
+
+        return $schema
+            ->state([
+                'singles' => $this->mapSingles($data['singles']),
+                'tournaments' => $this->mapRounds($data['tournaments']),
+                'jackpots' => $this->mapJackpots($data['jackpots']),
+            ])
+            ->components([
+                $this->breakdownSection(
+                    'Singles Games',
+                    'singles',
+                    'heroicon-o-user-group',
+                    'success',
+                    $data['totals']['singles_income'],
+                    'Group Size',
+                ),
+                $this->breakdownSection(
+                    'Tournaments',
+                    'tournaments',
+                    'heroicon-o-trophy',
+                    'info',
+                    $data['totals']['tournament_income'],
+                    'Rounds Played',
+                ),
+                $this->breakdownSection(
+                    'Jackpots',
+                    'jackpots',
+                    'heroicon-o-sparkles',
+                    'warning',
+                    $data['totals']['jackpot_income'],
+                    'Tier',
+                ),
+            ]);
+    }
+
+    /**
+     * @return array{
+     *     singles: array<int, mixed>,
+     *     tournaments: array<int, mixed>,
+     *     jackpots: array<int, mixed>,
+     *     totals: array{singles_income: float, tournament_income: float, jackpot_income: float, grand_total: float}
+     * }
+     */
+    protected function buildReportData(): array
+    {
+        [$start, $end] = $this->dateRange();
         $gameApi = app(GameApiService::class);
 
         $startDate = $start ?? '2000-01-01';
@@ -106,5 +152,96 @@ class GameIncomeReport extends Page
                 'grand_total' => $singlesIncome + $tournamentIncome + $jackpotIncome,
             ],
         ];
+    }
+
+    /**
+     * One breakdown section: an icon-led header, the running total, and a table
+     * of grouped rows.
+     */
+    private function breakdownSection(
+        string $heading,
+        string $stateKey,
+        string $icon,
+        string $color,
+        float $total,
+        string $labelColumn,
+    ): Section {
+        return Section::make($heading)
+            ->icon($icon)
+            ->iconColor($color)
+            ->description('House income — '.Format::money($total))
+            ->schema([
+                RepeatableEntry::make($stateKey)
+                    ->hiddenLabel()
+                    ->placeholder('No income recorded for this period.')
+                    ->table([
+                        TableColumn::make($labelColumn),
+                        TableColumn::make('House Income'),
+                    ])
+                    ->schema([
+                        TextEntry::make('label')
+                            ->badge()
+                            ->color($color),
+                        TextEntry::make('total_income')
+                            ->formatStateUsing(fn ($state): string => Format::money($state)),
+                    ]),
+            ]);
+    }
+
+    /**
+     * @param  array<int, mixed>  $rows
+     * @return array<int, array{label: string, total_income: mixed}>
+     */
+    private function mapSingles(array $rows): array
+    {
+        return collect($rows)
+            ->filter(fn ($row): bool => is_array($row))
+            ->map(fn (array $row): array => [
+                'label' => ($row['players'] ?? '—').' Players',
+                'total_income' => $row['total_income'] ?? 0,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, mixed>  $rows
+     * @return array<int, array{label: string, total_income: mixed}>
+     */
+    private function mapRounds(array $rows): array
+    {
+        return collect($rows)
+            ->filter(fn ($row): bool => is_array($row))
+            ->map(fn (array $row): array => [
+                'label' => ($row['jp_rounds'] ?? $row['rounds'] ?? '—').' Rounds',
+                'total_income' => $row['total_income'] ?? 0,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, mixed>  $rows
+     * @return array<int, array{label: string, total_income: mixed}>
+     */
+    private function mapJackpots(array $rows): array
+    {
+        return collect($rows)
+            ->filter(fn ($row): bool => is_array($row))
+            ->map(function (array $row): array {
+                $rounds = (int) ($row['jp_rounds'] ?? $row['rounds'] ?? 0);
+
+                return [
+                    'label' => match ($rounds) {
+                        21 => 'Gold (21)',
+                        17 => 'Silver (17)',
+                        13 => 'Bronze (13)',
+                        default => $rounds ? "{$rounds} Rounds" : '—',
+                    },
+                    'total_income' => $row['total_income'] ?? 0,
+                ];
+            })
+            ->values()
+            ->all();
     }
 }

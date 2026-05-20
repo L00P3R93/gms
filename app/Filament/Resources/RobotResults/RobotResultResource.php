@@ -3,20 +3,17 @@
 namespace App\Filament\Resources\RobotResults;
 
 use App\Filament\Resources\RobotResults\Pages\ListRobotResults;
-use App\Filament\Resources\RobotResults\Tables\RobotResultsTable;
-use App\Models\PlayedGame;
+use App\Models\AccountSnapshot;
 use App\Traits\SuperAdminAccess;
 use BackedEnum;
 use Filament\Resources\Resource;
-use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 
 class RobotResultResource extends Resource
 {
     use SuperAdminAccess;
 
-    protected static ?string $model = PlayedGame::class;
+    protected static ?string $model = AccountSnapshot::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-cpu-chip';
 
@@ -27,17 +24,6 @@ class RobotResultResource extends Resource
     protected static ?int $navigationSort = 2;
 
     protected static ?string $slug = 'robot-results';
-
-    public static function getEloquentQuery(): Builder
-    {
-        return parent::getEloquentQuery()
-            ->where('match_type', PlayedGame::TYPE_ROBOT);
-    }
-
-    public static function table(Table $table): Table
-    {
-        return RobotResultsTable::configure($table);
-    }
 
     public static function canCreate(): bool
     {

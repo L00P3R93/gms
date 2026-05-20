@@ -1,13 +1,9 @@
 <?php
 
 use App\Enums\UserStatus;
-use App\Models\Account;
 use App\Models\Holder;
-use App\Models\PlayedGame;
 use App\Models\User;
-use App\Policies\AccountPolicy;
 use App\Policies\HolderPolicy;
-use App\Policies\PlayedGamePolicy;
 use App\Policies\UserPolicy;
 
 beforeEach(function (): void {
@@ -52,68 +48,39 @@ it('no one can delete holders', function (): void {
     expect((new HolderPolicy)->delete($this->agent, $holder))->toBeFalse();
 });
 
-// --- AccountPolicy ---
+// --- AccountPolicy (skipped — accounts table dropped, model is API-only) ---
 
 it('both roles can viewAny accounts', function (): void {
-    $policy = new AccountPolicy;
-    expect($policy->viewAny($this->admin))->toBeTrue();
-    expect($policy->viewAny($this->agent))->toBeTrue();
-});
+    //
+})->skip('AccountPolicy removed; account access is controlled via API.');
 
 it('super-admin can update accounts', function (): void {
-    $account = Account::create([
-        'name' => 'Test', 'phone' => '0700000001', 'email' => 'x@x.com',
-        'password' => 'hash', 'game_status' => 1, 'credit' => 0, 'vcoins' => 0,
-    ]);
-    expect((new AccountPolicy)->update($this->admin, $account))->toBeTrue();
-});
+    //
+})->skip('AccountPolicy removed; account updates go through the API.');
 
 it('agent cannot update accounts', function (): void {
-    $account = Account::create([
-        'name' => 'Test', 'phone' => '0700000002', 'email' => 'y@y.com',
-        'password' => 'hash', 'game_status' => 1, 'credit' => 0, 'vcoins' => 0,
-    ]);
-    expect((new AccountPolicy)->update($this->agent, $account))->toBeFalse();
-});
+    //
+})->skip('AccountPolicy removed.');
 
 it('no one can create or delete accounts', function (): void {
-    $account = Account::create([
-        'name' => 'Test', 'phone' => '0700000003', 'email' => 'z@z.com',
-        'password' => 'hash', 'game_status' => 1, 'credit' => 0, 'vcoins' => 0,
-    ]);
-    $policy = new AccountPolicy;
-    expect($policy->create($this->admin))->toBeFalse();
-    expect($policy->delete($this->admin, $account))->toBeFalse();
-    expect($policy->delete($this->agent, $account))->toBeFalse();
-});
+    //
+})->skip('AccountPolicy removed.');
 
-// --- PlayedGamePolicy ---
+// --- PlayedGamePolicy (skipped — PlayedGame model removed) ---
 
 it('super-admin can viewAny played games', function (): void {
-    expect((new PlayedGamePolicy)->viewAny($this->admin))->toBeTrue();
-});
+    //
+})->skip('PlayedGamePolicy removed; game data is fetched from the API.');
 
 it('agent cannot viewAny played games', function (): void {
-    expect((new PlayedGamePolicy)->viewAny($this->agent))->toBeFalse();
-});
+    //
+})->skip('PlayedGamePolicy removed.');
 
 it('no one can create, update, or delete played games', function (): void {
-    $game = PlayedGame::create([
-        'match_name' => 'test', 'match_type' => PlayedGame::TYPE_MULTI_2,
-        'player_1' => '1', 'player_2' => '2', 'amount' => 100, 'winner' => '1',
-    ]);
-    $policy = new PlayedGamePolicy;
-    expect($policy->create($this->admin))->toBeFalse();
-    expect($policy->update($this->admin, $game))->toBeFalse();
-    expect($policy->delete($this->admin, $game))->toBeFalse();
-});
+    //
+})->skip('PlayedGamePolicy removed.');
 
 // --- Gate integration ---
-
-it('Gate respects AccountPolicy for agent viewAny', function (): void {
-    $this->actingAs($this->agent);
-    expect(Gate::check('viewAny', Account::class))->toBeTrue();
-});
 
 it('Gate respects HolderPolicy blocking agent', function (): void {
     $this->actingAs($this->agent);

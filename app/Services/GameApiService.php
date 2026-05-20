@@ -23,7 +23,7 @@ class GameApiService
         $this->baseUrl = rtrim(config('services.game_api.url', ''), '/');
         $this->apiKey = config('services.game_api.key', '');
         $this->encKey = config('services.game_api.openssl_key', '');
-        $this->encMethod = config('services.game_api.openssl_method', 'AES-256-CBC');
+        $this->encMethod = config('services.game_api.openssl_method', 'AES-128-CBC');
     }
 
     // -------------------------------------------------------------------------
@@ -123,7 +123,7 @@ class GameApiService
     {
         $enc = $this->encryptId((string) $customerId);
 
-        return $this->makeRequest('GET', "/customers/{$enc}");
+        return $this->makeRequest('GET', "/customers/{$enc}")['data'] ?? [];
     }
 
     /**
@@ -133,7 +133,7 @@ class GameApiService
      */
     public function getCustomerByAccount(string $accountNo): array
     {
-        return $this->makeRequest('GET', "/customers/{$accountNo}");
+        return $this->makeRequest('GET', "/customers/{$accountNo}")['data'] ?? [];
     }
 
     /**
@@ -146,7 +146,7 @@ class GameApiService
      */
     public function listCustomers(): array
     {
-        return $this->makeRequest('GET', '/customers');
+        return $this->makeRequest('GET', '/customers')['data'] ?? [];
     }
 
     /**

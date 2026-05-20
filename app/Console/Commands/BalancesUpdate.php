@@ -28,7 +28,7 @@ class BalancesUpdate extends Command
 
         try {
             // Step 1: Fetch current M-Pesa B2C balance
-            $currentMpesaBalance = $gameApi->getB2CBalance();
+            $currentMpesaBalance = $gameApi->getB2CBalanceAmount();
             $this->info("Current M-Pesa balance: KES {$currentMpesaBalance}");
 
             // Step 2: Fetch latest M-Pesa balance snapshot

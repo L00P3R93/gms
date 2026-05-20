@@ -29,3 +29,5 @@ yarn-error.log
 /storage/mpesa/*.pem
 /storage/mpesa/*.txt
 /storage/payslips/
+
+/.playwright-mcp
