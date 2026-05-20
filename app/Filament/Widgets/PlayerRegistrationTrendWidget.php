@@ -8,14 +8,15 @@ class PlayerRegistrationTrendWidget extends ChartWidget
 {
     protected ?string $heading = 'Daily Active Players (Last 30 Days)';
 
-    protected static ?int $sort = 6;
+    protected static ?int $sort = 5;
 
-    protected int|string|array $columnSpan = 'full';
+    protected int | string | array $columnSpan = 'full';
+
+    protected ?string $pollingInterval = '300s';
 
     public static function canView(): bool
     {
-        // return auth()->user()?->hasRole('super-admin') ?? false;
-        return false;
+        return auth()->user()?->hasRole('super-admin') ?? false;
     }
 
     protected function getData(): array

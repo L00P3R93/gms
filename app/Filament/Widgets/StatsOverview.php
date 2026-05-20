@@ -70,26 +70,26 @@ class StatsOverview extends BaseWidget
         $played = $stats['played'];
         $purchases = $stats['purchases'];
 
-        $fmt = fn ($v) => $v !== null && $v !== '' && $v !== 0 ? Format::formatNumber($v) : '—';
-        $fmtInt = fn ($v) => $v !== null && $v !== '' && $v !== 0 ? Format::formatNumber($v) : '—';
+        $fmt = fn ($v) => $v !== null && $v !== '' && $v !== 0 ? Format::formatNumber((int) $v) : '—';
+        $fmtInt = fn ($v) => $v !== null && $v !== '' && $v !== 0 ? Format::formatNumber((int) $v) : '—';
 
         return [
-            Stat::make('Total Customers', $fmtInt($customer['this_year'] ?? null))
+            Stat::make('Total Customers', $fmtInt($customer['this_year'].'Customers' ?? null))
                 ->description("Today: {$fmtInt($customer['today'] ?? null)} · week: {$fmtInt($customer['this_week'] ?? null)} · month: {$fmtInt($customer['this_month'] ?? null)}")
                 ->descriptionIcon('heroicon-m-users')
                 ->color($apiError ? 'gray' : 'primary'),
 
-            Stat::make('Games Played Today', $fmtInt($played['total'] ?? null))
+            Stat::make('Games Played Today', $fmtInt($played['total'].'Games' ?? null))
                 ->description("S: {$fmtInt($played['games'] ?? null)} · T: {$fmtInt($played['tournament'] ?? null)} · J: {$fmtInt($played['jackpots'] ?? null)}")
                 ->descriptionIcon('heroicon-m-play-circle')
                 ->color($apiError ? 'gray' : 'warning'),
 
-            Stat::make('Total Income (KES)', $fmt($totalIncome ?? null))
+            Stat::make('Total Income', 'KES'.$fmt($totalIncome ?? null))
                 ->description("S: {$fmt($income['games'] ?? null)} · T: {$fmt($income['tournaments'] ?? null)}· J: {$fmt($income['jackpots'] ?? null)}")
                 ->descriptionIcon('heroicon-m-banknotes')
                 ->color($apiError ? 'gray' : 'success'),
 
-            Stat::make('Total Purchases (KES)', $fmt($purchases['total'] ?? null))
+            Stat::make('Total Purchases', 'KES'.$fmt($purchases['total'] ?? null))
                 ->description('Total Purchases all time.')
                 ->descriptionIcon('heroicon-m-shopping-bag')
                 ->color($apiError ? 'gray' : 'info'),

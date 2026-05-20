@@ -2,9 +2,9 @@
     {
         "name": "Angel Palace",
         "userName": "angel_palace",
-        "email": "angelpalace@gmail.com",
+        "email": "angelpalace@mail.com",
         "phone": "0712345678",
-        "id_no": "712345678",
+        "id_no": null,
         "share": 0.40,
         "role": "director",
         "password": "Angel@123456"
@@ -14,7 +14,7 @@
         "userName": "asap",
         "email": "kennedymutia101@gmail.com",
         "phone": "0724574375",
-        "id_no": "724574375",
+        "id_no": null,
         "share": 0.33,
         "role": "super-admin",
         "password": "Kennedy@123456"
@@ -22,9 +22,9 @@
     {
         "name": "Zack Njai",
         "userName": "zack",
-        "email": "kennedymutia101@gmail.com",
+        "email": "zacknjai@gmail.com",
         "phone": "0790417280",
-        "id_no": "790417280",
+        "id_no": null,
         "share": 0.15,
         "role": "super-admin",
         "password": "Zack@123456"
@@ -34,8 +34,8 @@
         "userName": "mitko",
         "email": "mitko@mail.com",
         "phone": "0723456789",
-        "id_no": "723456789",
-        "share": 0.6,
+        "id_no": null,
+        "share": 0.06,
         "role": "agent",
         "password": "Mitko@123456"
     },
@@ -44,8 +44,8 @@
         "userName": "sntaks",
         "email": "vincentkioko51@gmail.com",
         "phone": "0795702455",
-        "id_no": "795702455",
-        "share": 0.6,
+        "id_no": null,
+        "share": 0.06,
         "role": "super-admin",
         "password": "Vincent@123456"
     }

@@ -9,7 +9,7 @@ use Filament\Widgets\TableWidget as BaseWidget;
 
 class ShareholdersTableWidget extends BaseWidget
 {
-    protected static ?int $sort = 4;
+    protected static ?int $sort = 6;
 
     protected int|string|array $columnSpan = 'full';
 
@@ -32,7 +32,6 @@ class ShareholdersTableWidget extends BaseWidget
             ->columns([
                 TextColumn::make('name')
                     ->searchable(),
-                TextColumn::make('phone'),
                 TextColumn::make('share_percent')
                     ->label('Share %')
                     ->suffix('%')
@@ -42,8 +41,6 @@ class ShareholdersTableWidget extends BaseWidget
                     ->label('Wallet Balance')
                     ->prefix('KES ')
                     ->numeric(2),
-                TextColumn::make('status')
-                    ->badge(),
             ])
             ->paginated([5, 10, 25]);
     }
