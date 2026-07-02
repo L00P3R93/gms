@@ -18,6 +18,7 @@ use App\Services\EncryptionService;
 use App\Services\GameApiService;
 use App\Services\MpesaService;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -66,5 +67,10 @@ class AppServiceProvider extends ServiceProvider
                 ->uncompromised()
             : null,
         );
+
+        // Compatibility fix for Filament v5 with Laravel 13
+        Collection::macro('clone', function (): Collection {
+            return clone $this;
+        });
     }
 }

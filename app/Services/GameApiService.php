@@ -520,12 +520,37 @@ class GameApiService
     /**
      * TASK-026: Fetch all game sessions (single, tournament, jackpot) for a customer.
      * Endpoint: GET /api/v1/customers/played/{enc}
+     *
+     * @param  int  $customerId  The customer ID
+     * @param  int|null  $singlePage  Page number for single games
+     * @param  int|null  $tournamentPage  Page number for tournament games
+     * @param  int|null  $jackpotPage  Page number for jackpot games
+     * @param  int  $perPage  Items per page for all game types
      */
-    public function getCustomerGamesPlayed(int $customerId): array
-    {
+    public function getCustomerGamesPlayed(
+        int $customerId,
+        ?int $singlePage = 1,
+        ?int $tournamentPage = 1,
+        ?int $jackpotPage = 1,
+        int $perPage = 10
+    ): array {
         $enc = $this->encryptId((string) $customerId);
 
-        return $this->makeRequest('GET', "/customers/played/{$enc}");
+        $query = [];
+        if ($singlePage !== null) {
+            $query['single_page'] = $singlePage;
+        }
+        if ($tournamentPage !== null) {
+            $query['tournament_page'] = $tournamentPage;
+        }
+        if ($jackpotPage !== null) {
+            $query['jackpot_page'] = $jackpotPage;
+        }
+        if ($perPage !== 10) {
+            $query['per_page'] = $perPage;
+        }
+
+        return $this->makeRequest('GET', "/customers/played/{$enc}", [], $query);
     }
 
     /**
