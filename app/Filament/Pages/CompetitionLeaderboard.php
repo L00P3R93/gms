@@ -11,6 +11,7 @@ use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 
 class CompetitionLeaderboard extends BaseReportPage implements HasTable
@@ -61,8 +62,8 @@ class CompetitionLeaderboard extends BaseReportPage implements HasTable
     protected function fetchRecords(): array
     {
         [$start, $end] = $this->dateRange();
-        $start ??= '2000-01-01';
-        $end ??= now()->toDateString();
+        $start = Carbon::now()->subMonths(3)->startOfMonth()->format('Y-m-d');
+        $end = Carbon::now()->endOfMonth()->format('Y-m-d');
 
         try {
             $response = Cache::remember(
