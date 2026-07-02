@@ -2,7 +2,11 @@
 
 namespace App\Filament\Widgets;
 
+use App\Exceptions\GameApiException;
+use App\Services\GameApiService;
+use Filament\Notifications\Notification;
 use Filament\Widgets\ChartWidget;
+use Illuminate\Support\Facades\Cache;
 
 class RevenueChartWidget extends ChartWidget
 {
@@ -10,42 +14,70 @@ class RevenueChartWidget extends ChartWidget
 
     protected static ?int $sort = 4;
 
-    protected int | string | array $columnSpan = 'full';
+    protected int|string|array $columnSpan = 'full';
 
     protected ?string $pollingInterval = '300s';
 
     public static function canView(): bool
     {
-        return auth()->user()?->hasRole('super-admin') ?? false;
+        return true;
     }
 
     protected function getData(): array
     {
+        $apiError = false;
+
+        try {
+            $data = Cache::remember('revenue-chart-data', 60, fn () => app(GameApiService::class)->getDailyIncome());
+        } catch (GameApiException $e) {
+            $apiError = true;
+            $data = ['daily_stats' => []];
+        }
+
+        if ($apiError) {
+            Notification::make()
+                ->title('Game API Unavailable')
+                ->body('Could not connect to the wallet API. Stats shown may be incomplete.')
+                ->warning()
+                ->send();
+        }
+
         $labels = collect(range(29, 0))
             ->map(fn ($i) => now()->subDays($i)->format('Y-m-d'))
             ->toArray();
 
-        $empty = array_fill(0, 30, 0);
+        $dailyStats = $data['daily_stats'] ?? [];
+
+        $singleGamesData = [];
+        $tournamentsData = [];
+        $jackpotsData = [];
+
+        foreach ($labels as $date) {
+            $stats = $dailyStats[$date] ?? [];
+            $singleGamesData[] = $stats['single_games'] ?? 0;
+            $tournamentsData[] = $stats['tournaments'] ?? 0;
+            $jackpotsData[] = $stats['jackpots'] ?? 0;
+        }
 
         return [
             'datasets' => [
                 [
                     'label' => 'Singles Income (KES)',
-                    'data' => $empty,
+                    'data' => $singleGamesData,
                     'borderColor' => '#f59e0b',
                     'backgroundColor' => 'rgba(245,158,11,0.1)',
                     'fill' => true,
                 ],
                 [
                     'label' => 'Tournament Income (KES)',
-                    'data' => $empty,
+                    'data' => $tournamentsData,
                     'borderColor' => '#3b82f6',
                     'backgroundColor' => 'rgba(59,130,246,0.1)',
                     'fill' => true,
                 ],
                 [
                     'label' => 'Jackpot Income (KES)',
-                    'data' => $empty,
+                    'data' => $jackpotsData,
                     'borderColor' => '#10b981',
                     'backgroundColor' => 'rgba(16,185,129,0.1)',
                     'fill' => true,

@@ -401,6 +401,16 @@ class GameApiService
     }
 
     /**
+     * Fetch daily income stats for the last 30 days.
+     * Endpoint: GET /api/v1/stats/income/daily-30-days
+     * Returns: { start_date, end_date, daily_stats: { "YYYY-MM-DD": { single_games, tournaments, jackpots, total } } }
+     */
+    public function getDailyIncome(): array
+    {
+        return $this->makeRequest('GET', '/stats/income/daily-30-days')['data'] ?? [];
+    }
+
+    /**
      * TASK-019: Fetch leaderboards for a date range.
      * Endpoint: POST /api/v1/customers/leaderboard
      * Returns: { single_leaderboard: [...], competitions_leaderboard: [...] }

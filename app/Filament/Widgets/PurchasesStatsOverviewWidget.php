@@ -19,6 +19,11 @@ class PurchasesStatsOverviewWidget extends StatsOverviewWidget
 
     protected int|string|array $columnSpan = 4;
 
+    public static function canView(): bool
+    {
+        return false;
+    }
+
     protected function getStats(): array
     {
         $apiError = false;

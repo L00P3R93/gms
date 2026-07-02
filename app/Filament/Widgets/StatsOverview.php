@@ -66,7 +66,7 @@ class StatsOverview extends BaseWidget
 
         $customer = $stats['customer'];
         $income = $stats['income'];
-        $totalIncome = $income['games'] + $income['tournaments'] + $income['jackpots'];
+        $totalIncome = $income['games']['total'] + $income['tournaments']['total'] + $income['jackpots']['total'];
         $played = $stats['played'];
         $purchases = $stats['purchases'];
 
@@ -84,12 +84,12 @@ class StatsOverview extends BaseWidget
                 ->descriptionIcon('heroicon-m-play-circle')
                 ->color($apiError ? 'gray' : 'warning'),
 
-            Stat::make('Total Income', 'KES'.$fmt($totalIncome ?? null))
-                ->description("S: {$fmt($income['games'] ?? null)} · T: {$fmt($income['tournaments'] ?? null)}· J: {$fmt($income['jackpots'] ?? null)}")
+            Stat::make('Total Income', 'KES '.$fmt($totalIncome ?? null))
+                ->description("S: {$fmt($income['games']['total'] ?? null)} · T: {$fmt($income['tournaments']['total'] ?? null)}· J: {$fmt($income['jackpots']['total'] ?? null)}")
                 ->descriptionIcon('heroicon-m-banknotes')
                 ->color($apiError ? 'gray' : 'success'),
 
-            Stat::make('Total Purchases', 'KES'.$fmt($purchases['total'] ?? null))
+            Stat::make('Total Purchases', 'KES '.$fmt($purchases['total'] ?? null))
                 ->description('Total Purchases all time.')
                 ->descriptionIcon('heroicon-m-shopping-bag')
                 ->color($apiError ? 'gray' : 'info'),
