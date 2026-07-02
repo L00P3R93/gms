@@ -9,7 +9,7 @@
                 </div>
             </div>
         </x-filament::section>
+    @else
+        {{ $this->reportInfolist }}
     @endif
-
-    {{ $this->reportInfolist }}
 </x-filament-panels::page>

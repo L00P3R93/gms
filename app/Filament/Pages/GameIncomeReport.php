@@ -11,7 +11,6 @@ use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Illuminate\Support\Facades\Cache;
 
 class GameIncomeReport extends BaseReportPage
 {
@@ -30,6 +29,8 @@ class GameIncomeReport extends BaseReportPage
      * @var array<string, mixed>|null
      */
     protected ?array $cachedReport = null;
+
+    public bool $isLoading = false;
 
     /**
      * @return array<int, class-string>
@@ -120,19 +121,38 @@ class GameIncomeReport extends BaseReportPage
 
         $startDate = $start ?? '2000-01-01';
         $endDate = $end ?? now()->toDateString();
-        $cacheKey = "income_report_{$this->period}_{$startDate}_{$endDate}";
+
+        \Log::info('GameIncomeReport fetching data', [
+            'period' => $this->period,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+        ]);
 
         try {
-            $data = Cache::remember($cacheKey, 120, function () use ($gameApi, $startDate, $endDate): array {
-                return [
-                    'singles' => $gameApi->getGameIncomeBreakdown($startDate, $endDate),
-                    'tournaments' => $gameApi->getCompetitionIncomeBreakdown(1, $startDate, $endDate),
-                    'jackpots' => $gameApi->getCompetitionIncomeBreakdown(2, $startDate, $endDate),
-                ];
-            });
+            $singles = $gameApi->getGameIncomeBreakdown($startDate, $endDate);
+            $tournaments = $gameApi->getCompetitionIncomeBreakdown(1, $startDate, $endDate);
+            $jackpots = $gameApi->getCompetitionIncomeBreakdown(2, $startDate, $endDate);
+
+            \Log::info('GameIncomeReport API response', [
+                'singles_count' => count($singles),
+                'tournaments_count' => count($tournaments),
+                'jackpots_count' => count($jackpots),
+            ]);
+
+            $data = [
+                'singles' => $singles,
+                'tournaments' => $tournaments,
+                'jackpots' => $jackpots,
+            ];
 
             $this->apiError = false;
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            \Log::error('GameIncomeReport API error', [
+                'period' => $this->period,
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'error' => $e->getMessage(),
+            ]);
             $this->apiError = true;
             $data = ['singles' => [], 'tournaments' => [], 'jackpots' => []];
         }
@@ -243,5 +263,10 @@ class GameIncomeReport extends BaseReportPage
             })
             ->values()
             ->all();
+    }
+
+    protected function onFilterApplied(): void
+    {
+        $this->cachedReport = null;
     }
 }

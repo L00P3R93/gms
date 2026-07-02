@@ -53,14 +53,16 @@ class GameApiService
         string $method,
         string $path,
         array $body = [],
-        array $query = []
+        array $query = [],
+        int $timeout = 8,
+        int $connectTimeout = 5
     ): array {
         $url = $this->baseUrl.$path;
 
         $pending = Http::withHeaders([
             'X-API-KEY' => $this->apiKey,
             'Accept' => 'application/json',
-        ])->timeout(8)->connectTimeout(5);
+        ])->timeout($timeout)->connectTimeout($connectTimeout);
 
         try {
             $response = match (strtoupper($method)) {
@@ -714,7 +716,7 @@ class GameApiService
         return $this->makeRequest('POST', '/game/income', [
             'start_date' => $startDate,
             'end_date' => $endDate,
-        ])['data'] ?? [];
+        ], [], 60, 10)['data'] ?? [];
     }
 
     /**
@@ -730,7 +732,7 @@ class GameApiService
         return $this->makeRequest('POST', "/competition/income/{$enc}", [
             'start_date' => $startDate,
             'end_date' => $endDate,
-        ])['data'] ?? [];
+        ], [], 60, 10)['data'] ?? [];
     }
 
     /**
