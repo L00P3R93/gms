@@ -15,7 +15,7 @@ class ShareDistributionChartWidget extends ChartWidget
 
     public static function canView(): bool
     {
-        return auth()->user()?->hasRole('super-admin') ?? false;
+        return true;
     }
 
     protected function getData(): array

@@ -19,7 +19,7 @@ class ShareholdersTableWidget extends BaseWidget
 
     public static function canView(): bool
     {
-        return auth()->user()?->hasRole('super-admin') ?? false;
+        return true;
     }
 
     public function table(Table $table): Table
