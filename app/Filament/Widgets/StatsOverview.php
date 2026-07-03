@@ -80,7 +80,7 @@ class StatsOverview extends BaseWidget
                 ->color($apiError ? 'gray' : 'primary'),
 
             Stat::make('Games Played Today', $fmtInt($played['total'].'Games' ?? null))
-                ->description("S: {$fmtInt($played['games'] ?? null)} · T: {$fmtInt($played['tournament'] ?? null)} · J: {$fmtInt($played['jackpots'] ?? null)}")
+                ->description("S: {$fmtInt($played['games']['total'] ?? null)} · T: {$fmtInt($played['tournament']['total'] ?? null)} · J: {$fmtInt($played['jackpots']['total'] ?? null)}")
                 ->descriptionIcon('heroicon-m-play-circle')
                 ->color($apiError ? 'gray' : 'warning'),
 

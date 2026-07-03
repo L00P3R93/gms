@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class WithdrawalsThisMonthWidget extends BaseWidget
 {
-    protected static ?int $sort = 3;
+    protected static ?int $sort = 4;
 
     protected ?string $pollingInterval = '60s';
 

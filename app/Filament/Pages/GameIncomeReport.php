@@ -197,6 +197,7 @@ class GameIncomeReport extends BaseReportPage
                     ->table([
                         TableColumn::make($labelColumn),
                         TableColumn::make('House Income'),
+                        TableColumn::make('Games Played'),
                     ])
                     ->schema([
                         TextEntry::make('label')
@@ -204,6 +205,8 @@ class GameIncomeReport extends BaseReportPage
                             ->color($color),
                         TextEntry::make('total_income')
                             ->formatStateUsing(fn ($state): string => Format::money($state)),
+                        TextEntry::make('games_played')
+                            ->formatStateUsing(fn ($state): string => Format::formatNumber($state)),
                     ]),
             ]);
     }
@@ -219,6 +222,7 @@ class GameIncomeReport extends BaseReportPage
             ->map(fn (array $row): array => [
                 'label' => ($row['players'] ?? '—').' Players',
                 'total_income' => $row['total_income'] ?? 0,
+                'games_played' => $row['games_played'] ?? 0,
             ])
             ->values()
             ->all();
@@ -235,6 +239,7 @@ class GameIncomeReport extends BaseReportPage
             ->map(fn (array $row): array => [
                 'label' => ($row['jp_rounds'] ?? $row['rounds'] ?? '—').' Rounds',
                 'total_income' => $row['total_income'] ?? 0,
+                'games_played' => $row['games_played'] ?? 0,
             ])
             ->values()
             ->all();
@@ -259,6 +264,7 @@ class GameIncomeReport extends BaseReportPage
                         default => $rounds ? "{$rounds} Rounds" : '—',
                     },
                     'total_income' => $row['total_income'] ?? 0,
+                    'games_played' => $row['games_played'] ?? 0,
                 ];
             })
             ->values()

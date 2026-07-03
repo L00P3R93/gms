@@ -12,7 +12,7 @@ class RevenueChartWidget extends ChartWidget
 {
     protected ?string $heading = 'Game Revenue (Last 30 Days)';
 
-    protected static ?int $sort = 4;
+    protected static ?int $sort = 5;
 
     protected int|string|array $columnSpan = 'full';
 
