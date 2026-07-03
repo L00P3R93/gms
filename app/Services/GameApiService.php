@@ -413,6 +413,16 @@ class GameApiService
     }
 
     /**
+     * Fetch current business day's cumulative income.
+     * Endpoint: GET /api/v1/stats/income
+     * Returns: { success: true, data: { total_income, games, tournaments, jackpots } }
+     */
+    public function getCurrentDayIncome(): array
+    {
+        return $this->makeRequest('GET', '/stats/income')['data'] ?? [];
+    }
+
+    /**
      * TASK-019: Fetch leaderboards for a date range.
      * Endpoint: POST /api/v1/customers/leaderboard
      * Returns: { single_leaderboard: [...], competitions_leaderboard: [...] }

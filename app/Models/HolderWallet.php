@@ -13,6 +13,10 @@ class HolderWallet extends Model
 
     protected $guarded = [];
 
+    protected $casts = [
+        'balance' => 'decimal:4',
+    ];
+
     public function holder(): BelongsTo
     {
         return $this->belongsTo(Holder::class, 'holder_id');

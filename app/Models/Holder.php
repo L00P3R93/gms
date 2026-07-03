@@ -19,6 +19,7 @@ class Holder extends Model
 
     protected $casts = [
         'status' => HolderStatus::class,
+        'share' => 'decimal:4',
     ];
 
     public function user(): BelongsTo
@@ -39,6 +40,11 @@ class Holder extends Model
     public function withdrawals(): HasMany
     {
         return $this->hasMany(Withdraw::class, 'receiver_id')->where('type', 'holder');
+    }
+
+    public function walletTransactions(): HasMany
+    {
+        return $this->hasMany(WalletTransaction::class, 'holder_id');
     }
 
     public function getSharePercentAttribute(): float

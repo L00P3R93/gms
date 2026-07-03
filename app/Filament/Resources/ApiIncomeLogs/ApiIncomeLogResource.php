@@ -1,0 +1,40 @@
+<?php
+
+namespace App\Filament\Resources\ApiIncomeLogs;
+
+use App\Filament\Resources\ApiIncomeLogs\Pages\ListApiIncomeLogs;
+use App\Filament\Resources\ApiIncomeLogs\Tables\ApiIncomeLogsTable;
+use App\Models\ApiIncomeLog;
+use BackedEnum;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Tables\Table;
+use UnitEnum;
+
+class ApiIncomeLogResource extends Resource
+{
+    protected static ?string $model = ApiIncomeLog::class;
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-server';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Financial';
+
+    protected static ?int $navigationSort = 6;
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema;
+    }
+
+    public static function table(Table $table): Table
+    {
+        return ApiIncomeLogsTable::configure($table);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => ListApiIncomeLogs::route('/'),
+        ];
+    }
+}
