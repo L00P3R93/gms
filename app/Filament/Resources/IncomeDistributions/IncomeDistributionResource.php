@@ -9,6 +9,7 @@ use App\Models\IncomeDistribution;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use UnitEnum;
 
@@ -16,7 +17,7 @@ class IncomeDistributionResource extends Resource
 {
     protected static ?string $model = IncomeDistribution::class;
 
-    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-currency-dollar';
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCurrencyDollar;
 
     protected static string|UnitEnum|null $navigationGroup = 'Financial';
 
