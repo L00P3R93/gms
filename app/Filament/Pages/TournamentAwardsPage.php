@@ -31,6 +31,8 @@ class TournamentAwardsPage extends Page implements HasTable
 
     protected string $view = 'filament.pages.awards-page';
 
+    protected static bool $shouldRegisterNavigation = false;
+
     public bool $apiError = false;
 
     public static function canAccess(): bool

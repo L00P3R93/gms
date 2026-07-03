@@ -25,6 +25,8 @@ class RobotResultResource extends Resource
 
     protected static ?string $slug = 'robot-results';
 
+    protected static bool $shouldRegisterNavigation = false;
+
     public static function canCreate(): bool
     {
         return false;

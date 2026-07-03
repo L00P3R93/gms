@@ -33,6 +33,8 @@ class JackpotAwardsPage extends Page implements HasTable
 
     public bool $apiError = false;
 
+    protected static bool $shouldRegisterNavigation = false;
+
     public static function canAccess(): bool
     {
         return static::canViewAny();

@@ -33,6 +33,8 @@ class PurchasesPage extends Page implements HasTable
 
     public bool $apiError = false;
 
+    protected static bool $shouldRegisterNavigation = false;
+
     public function table(Table $table): Table
     {
         return $table
