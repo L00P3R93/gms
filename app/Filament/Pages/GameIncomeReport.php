@@ -70,13 +70,11 @@ class GameIncomeReport extends BaseReportPage
 
     public function reportInfolist(Schema $schema): Schema
     {
-        $data = $this->getReportData();
-
         return $schema
-            ->state([
-                'singles' => $this->mapSingles($data['singles']),
-                'tournaments' => $this->mapRounds($data['tournaments']),
-                'jackpots' => $this->mapJackpots($data['jackpots']),
+            ->constantState(fn (): array => [
+                'singles' => $this->mapSingles($this->getReportData()['singles']),
+                'tournaments' => $this->mapRounds($this->getReportData()['tournaments']),
+                'jackpots' => $this->mapJackpots($this->getReportData()['jackpots']),
             ])
             ->components([
                 $this->breakdownSection(
@@ -84,7 +82,7 @@ class GameIncomeReport extends BaseReportPage
                     'singles',
                     'heroicon-o-user-group',
                     'success',
-                    $data['totals']['singles_income'],
+                    fn () => $this->getReportData()['totals']['singles_income'],
                     'Group Size',
                 ),
                 $this->breakdownSection(
@@ -92,7 +90,7 @@ class GameIncomeReport extends BaseReportPage
                     'tournaments',
                     'heroicon-o-trophy',
                     'info',
-                    $data['totals']['tournament_income'],
+                    fn () => $this->getReportData()['totals']['tournament_income'],
                     'Rounds Played',
                 ),
                 $this->breakdownSection(
@@ -100,7 +98,7 @@ class GameIncomeReport extends BaseReportPage
                     'jackpots',
                     'heroicon-o-sparkles',
                     'warning',
-                    $data['totals']['jackpot_income'],
+                    fn () => $this->getReportData()['totals']['jackpot_income'],
                     'Tier',
                 ),
             ]);
@@ -183,13 +181,13 @@ class GameIncomeReport extends BaseReportPage
         string $stateKey,
         string $icon,
         string $color,
-        float $total,
+        callable $total,
         string $labelColumn,
     ): Section {
         return Section::make($heading)
             ->icon($icon)
             ->iconColor($color)
-            ->description('House income — '.Format::money($total))
+            ->description(fn () => 'House income — '.Format::money($total()))
             ->schema([
                 RepeatableEntry::make($stateKey)
                     ->hiddenLabel()
@@ -274,5 +272,6 @@ class GameIncomeReport extends BaseReportPage
     protected function onFilterApplied(): void
     {
         $this->cachedReport = null;
+        $this->refresh();
     }
 }
