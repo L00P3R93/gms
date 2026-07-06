@@ -35,29 +35,19 @@ class IncomeDistributionService
 
             // Step 3: Begin database transaction and load processing state with row locking
             return DB::transaction(function () use ($currentApiTotal) {
-                $processingState = IncomeProcessingState::where('business_date', now()->toDateString())
+                $currentBusinessDate = now()->toDateString();
+
+                $processingState = IncomeProcessingState::where('business_date', $currentBusinessDate)
                     ->lockForUpdate()
                     ->first();
 
                 if (! $processingState) {
                     $processingState = IncomeProcessingState::create([
-                        'business_date' => now()->toDateString(),
+                        'business_date' => $currentBusinessDate,
                         'last_processed_total' => 0,
                         'last_api_total' => 0,
                         'last_checked_at' => now(),
                     ]);
-                }
-
-                $currentBusinessDate = now()->toDateString();
-
-                // Step 4: Detect business date change
-                if ($processingState->business_date !== $currentBusinessDate) {
-                    Log::info('Business date changed, resetting processing state', [
-                        'old_date' => $processingState->business_date,
-                        'new_date' => $currentBusinessDate,
-                    ]);
-                    $processingState->business_date = $currentBusinessDate;
-                    $processingState->resetForNewDay();
                 }
 
                 // Step 5: Compute delta
