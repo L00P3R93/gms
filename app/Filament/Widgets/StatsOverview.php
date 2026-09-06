@@ -16,7 +16,7 @@ class StatsOverview extends BaseWidget
 
     protected ?string $pollingInterval = '60s';
 
-    protected int|string|array $columnSpan = 4;
+    protected int|string|array $columnSpan = 3;
 
     protected ?string $heading = 'Overall Summary';
 
@@ -89,10 +89,10 @@ class StatsOverview extends BaseWidget
                 ->descriptionIcon('heroicon-m-banknotes')
                 ->color($apiError ? 'gray' : 'success'),
 
-            Stat::make('Total Purchases', 'KES '.$fmt($purchases['total'] ?? null))
+            /*Stat::make('Total Purchases', 'KES '.$fmt($purchases['total'] ?? null))
                 ->description('Total Purchases all time.')
                 ->descriptionIcon('heroicon-m-shopping-bag')
-                ->color($apiError ? 'gray' : 'info'),
+                ->color($apiError ? 'gray' : 'info'),*/
         ];
     }
 }

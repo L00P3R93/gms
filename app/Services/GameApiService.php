@@ -7,6 +7,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class GameApiService
 {
@@ -61,6 +62,7 @@ class GameApiService
 
         $pending = Http::withHeaders([
             'X-API-KEY' => $this->apiKey,
+            'Idempotency-Key' => Str::uuid()->toString(),
             'Accept' => 'application/json',
         ])->timeout($timeout)->connectTimeout($connectTimeout);
 
@@ -371,7 +373,7 @@ class GameApiService
      */
     public function getDashboardStats(): array
     {
-        $headers = ['X-API-KEY' => $this->apiKey, 'Accept' => 'application/json'];
+        $headers = ['X-API-KEY' => $this->apiKey, 'Accept' => 'application/json', 'Idempotency-Key' => Str::uuid()->toString()];
         $base = $this->baseUrl;
 
         $responses = Http::pool(fn (Pool $pool) => [
