@@ -11,6 +11,7 @@ use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use UnitEnum;
 
 class GameIncomeReport extends BaseReportPage
 {
@@ -18,7 +19,9 @@ class GameIncomeReport extends BaseReportPage
 
     protected static ?string $navigationLabel = 'Income Report';
 
-    protected static ?int $navigationSort = 3;
+    protected static string|UnitEnum|null $navigationGroup = '📈 Reports';
+
+    protected static ?int $navigationSort = 0;
 
     protected string $view = 'filament.pages.game-income-report';
 

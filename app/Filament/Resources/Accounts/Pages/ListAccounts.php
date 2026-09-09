@@ -66,16 +66,20 @@ class ListAccounts extends Page implements HasTable
             ])
             ->recordActions([
                 Action::make('view')
-                    ->label('View Details')
+                    ->iconButton()
                     ->icon(Heroicon::OutlinedEye)
                     ->color('info')
+                    ->tooltip('View Details')
+                    ->visible(fn () => auth()->user()->hasPermissionTo('account.view'))
                     ->url(fn (array $record): ?string => isset($record['id']) ? AccountResource::getUrl('view', ['record' => $record['id']]) : null),
 
                 Action::make('editWallet')
-                    ->label('Edit Wallet')
+                    ->iconButton()
                     ->icon(Heroicon::OutlinedBanknotes)
                     ->color('warning')
+                    ->tooltip('Edit Wallet')
                     ->fillForm(fn (array $record): array => ['balance' => $record['balance'] ?? 0])
+                    ->visible(fn () => auth()->user()->hasPermissionTo('account.wallet.edit'))
                     ->schema([
                         TextInput::make('balance')
                             ->label('Wallet Balance')
@@ -101,11 +105,12 @@ class ListAccounts extends Page implements HasTable
                     }),
 
                 Action::make('hide')
-                    ->label('Hide Profile')
+                    ->iconButton()
                     ->icon(Heroicon::OutlinedEyeSlash)
                     ->color('danger')
+                    ->tooltip('Hide Profile')
                     ->requiresConfirmation()
-                    ->visible(fn (array $record): bool => ((int) ($record['status'] ?? Account::STATUS_ACTIVE)) === Account::STATUS_ACTIVE)
+                    ->visible(fn (array $record): bool => ((int) ($record['status'] ?? Account::STATUS_ACTIVE)) === Account::STATUS_ACTIVE && auth()->user()->hasPermissionTo('account.edit'))
                     ->action(function (array $record): void {
                         try {
                             app(GameApiService::class)->updateCustomer($record['id'], ['status' => Account::STATUS_HIDDEN]);
@@ -117,11 +122,12 @@ class ListAccounts extends Page implements HasTable
                     }),
 
                 Action::make('unhide')
-                    ->label('Unhide Profile')
+                    ->iconButton()
                     ->icon(Heroicon::OutlinedEye)
                     ->color('success')
+                    ->tooltip('Unhide Profile')
                     ->requiresConfirmation()
-                    ->visible(fn (array $record): bool => ((int) ($record['status'] ?? Account::STATUS_ACTIVE)) === Account::STATUS_HIDDEN)
+                    ->visible(fn (array $record): bool => ((int) ($record['status'] ?? Account::STATUS_ACTIVE)) === Account::STATUS_HIDDEN && auth()->user()->hasPermissionTo('account.edit'))
                     ->action(function (array $record): void {
                         try {
                             app(GameApiService::class)->updateCustomer($record['id'], ['status' => Account::STATUS_ACTIVE]);

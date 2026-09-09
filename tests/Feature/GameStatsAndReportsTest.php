@@ -28,21 +28,29 @@ beforeEach(function (): void {
 
 // --- Access control ---
 
-it('blocks agents from game result resources', function (): void {
+it('allows agents to view game result resources they have permission for', function (): void {
+    // Agents have game-results.view but not jackpot-results.view or tournament-results.view
     $this->actingAs($this->agent);
 
-    get(GameResultResource::getUrl('index'))->assertForbidden();
-    get(RobotResultResource::getUrl('index'))->assertForbidden();
+    get(GameResultResource::getUrl('index'))->assertOk();
+    get(RobotResultResource::getUrl('index'))->assertOk();
     get(JackpotResultResource::getUrl('index'))->assertForbidden();
     get(TournamentResultResource::getUrl('index'))->assertForbidden();
 });
 
-it('blocks agents from report pages', function (): void {
+it('allows agents to access permission-gated report pages', function (): void {
+    // Agents have reports.view permission
     $this->actingAs($this->agent);
 
-    get(CompetitionLeaderboard::getUrl())->assertForbidden();
-    get(SinglesLeaderboard::getUrl())->assertForbidden();
-    get(GameIncomeReport::getUrl())->assertForbidden();
+    get(CompetitionLeaderboard::getUrl())->assertOk();
+    get(SinglesLeaderboard::getUrl())->assertOk();
+    get(GameIncomeReport::getUrl())->assertOk();
+});
+
+it('blocks agents from role-gated award pages', function (): void {
+    // JackpotAwardsPage and TournamentAwardsPage require super-admin or admin role
+    $this->actingAs($this->agent);
+
     get(JackpotAwardsPage::getUrl())->assertForbidden();
     get(TournamentAwardsPage::getUrl())->assertForbidden();
 });

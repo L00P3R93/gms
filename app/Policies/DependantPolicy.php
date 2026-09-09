@@ -9,26 +9,26 @@ class DependantPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->hasRole('super-admin');
+        return $user->hasPermissionTo('dependants.view');
     }
 
     public function view(User $user, Dependant $dependant): bool
     {
-        return $user->hasRole('super-admin');
+        return $user->hasPermissionTo('dependants.view');
     }
 
     public function create(User $user): bool
     {
-        return $user->hasRole('super-admin');
+        return $user->hasPermissionTo('dependants.create');
     }
 
     public function update(User $user, Dependant $dependant): bool
     {
-        return $user->hasRole('super-admin');
+        return $user->hasPermissionTo('dependants.edit');
     }
 
     public function delete(User $user, Dependant $dependant): bool
     {
-        return false;
+        return $user->hasPermissionTo('dependants.delete');
     }
 }

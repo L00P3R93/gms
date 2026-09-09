@@ -17,7 +17,7 @@ class AuditLogResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-clipboard-document-list';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Administration';
+    protected static string|UnitEnum|null $navigationGroup = '⚙️ Administration';
 
     protected static ?int $navigationSort = 10;
 
@@ -34,11 +34,6 @@ class AuditLogResource extends Resource
     public static function canDelete($record): bool
     {
         return false;
-    }
-
-    public static function canViewAny(): bool
-    {
-        return auth()->user()?->hasAnyRole(['super-admin', 'admin']) ?? false;
     }
 
     public static function form(Schema $schema): Schema

@@ -9,26 +9,26 @@ class ExpensePolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->hasRole('super-admin');
+        return $user->hasPermissionTo('expenses.view');
     }
 
     public function view(User $user, Expense $expense): bool
     {
-        return $user->hasRole('super-admin');
+        return $user->hasPermissionTo('expenses.view');
     }
 
     public function create(User $user): bool
     {
-        return $user->hasRole('super-admin');
+        return $user->hasPermissionTo('expenses.create');
     }
 
     public function update(User $user, Expense $expense): bool
     {
-        return $user->hasRole('super-admin');
+        return $user->hasPermissionTo('expenses.edit');
     }
 
     public function delete(User $user, Expense $expense): bool
     {
-        return $user->hasRole('super-admin');
+        return $user->hasPermissionTo('expenses.delete');
     }
 }

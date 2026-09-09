@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Expenses\Schemas;
 
 use App\Enums\ExpenseCategory;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
@@ -16,13 +17,13 @@ class ExpenseForm
     {
         return $schema->components([
             Section::make('Expense Details')
-                ->columns(2)
                 ->icon('heroicon-o-banknotes')
                 ->schema([
                     Select::make('category')
                         ->options(ExpenseCategory::class)
                         ->enum(ExpenseCategory::class)
                         ->required()
+                        ->native(false)
                         ->prefixIcon(Heroicon::OutlinedTag)
                         ->prefixIconColor('info'),
                     TextInput::make('amount')
@@ -36,7 +37,20 @@ class ExpenseForm
                         ->required()
                         ->columnSpanFull()
                         ->rows(3),
-                ]),
-        ]);
+                ])->columns(2)->columnSpan(['lg' => 3]),
+            Section::make('Receipt')
+                ->icon('heroicon-o-paper-clip')
+                ->schema([
+                    SpatieMediaLibraryFileUpload::make('receipt')
+                        ->collection('receipt')
+                        ->label('Upload Receipt')
+                        ->helperText('PDF or image file, max 3MB')
+                        ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'])
+                        ->maxSize(3072)
+                        ->downloadable()
+                        ->previewable()
+                        ->columnSpanFull(),
+                ])->columnSpanFull(),
+        ])->columns(3);
     }
 }

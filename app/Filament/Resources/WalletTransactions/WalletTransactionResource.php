@@ -18,9 +18,14 @@ class WalletTransactionResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedReceiptPercent;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Financial';
+    protected static string|UnitEnum|null $navigationGroup = '📊 Financial';
 
     protected static ?int $navigationSort = 5;
+
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->hasPermissionTo('wallet-transactions.view') ?? false;
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -37,5 +42,10 @@ class WalletTransactionResource extends Resource
         return [
             'index' => ListWalletTransactions::route('/'),
         ];
+    }
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
     }
 }

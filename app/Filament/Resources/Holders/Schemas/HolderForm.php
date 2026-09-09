@@ -16,7 +16,6 @@ class HolderForm
     {
         return $schema->components([
             Section::make('Holder Details')
-                ->columns(2)
                 ->icon('heroicon-o-identification')
                 ->schema([
                     TextInput::make('name')
@@ -44,15 +43,15 @@ class HolderForm
                         ->maxValue(100)
                         ->prefixIcon(Heroicon::OutlinedChartPie)
                         ->prefixIconColor('warning'),
-                ]),
+                ])->columns(2)->columnSpan(['lg' => 2]),
             Section::make('Status & User Link')
-                ->columns(2)
                 ->icon('heroicon-o-link')
                 ->schema([
                     Select::make('status')
                         ->options(HolderStatus::class)
                         ->enum(HolderStatus::class)
                         ->required()
+                        ->native(false)
                         ->prefixIcon(Heroicon::OutlinedCheckCircle)
                         ->prefixIconColor('success'),
                     Select::make('user_id')
@@ -60,9 +59,10 @@ class HolderForm
                         ->options(fn () => User::pluck('name', 'id')->toArray())
                         ->searchable()
                         ->nullable()
+                        ->native(false)
                         ->prefixIcon(Heroicon::OutlinedLink)
                         ->prefixIconColor('info'),
-                ]),
-        ]);
+                ])->columns(1)->columnSpan(['lg' => 1]),
+        ])->columns(3);
     }
 }

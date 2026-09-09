@@ -9,12 +9,12 @@ class WithdrawPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->hasRole('super-admin');
+        return $user->hasPermissionTo('withdrawals.view');
     }
 
     public function view(User $user, Withdraw $withdraw): bool
     {
-        return $user->hasRole('super-admin');
+        return $user->hasPermissionTo('withdrawals.view');
     }
 
     public function create(User $user): bool
@@ -24,7 +24,7 @@ class WithdrawPolicy
 
     public function update(User $user, Withdraw $withdraw): bool
     {
-        return $user->hasRole('super-admin');
+        return false;
     }
 
     public function delete(User $user, Withdraw $withdraw): bool

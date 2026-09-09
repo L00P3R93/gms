@@ -3,7 +3,6 @@
 namespace App\Filament\Pages;
 
 use App\Support\Format;
-use App\Traits\SuperAdminAccess;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -20,8 +19,6 @@ use UnitEnum;
  */
 abstract class BaseReportPage extends Page
 {
-    use SuperAdminAccess;
-
     protected static string|UnitEnum|null $navigationGroup = 'Reports';
 
     #[Url]
@@ -37,7 +34,7 @@ abstract class BaseReportPage extends Page
 
     public static function canAccess(): bool
     {
-        return static::canViewAny();
+        return auth()->user()?->hasPermissionTo('reports.view') ?? false;
     }
 
     /**

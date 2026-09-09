@@ -4,26 +4,28 @@ namespace App\Filament\Resources\GameResults;
 
 use App\Filament\Resources\GameResults\Pages\ListGameResults;
 use App\Models\AccountSnapshot;
-use App\Traits\SuperAdminAccess;
 use BackedEnum;
 use Filament\Resources\Resource;
 use UnitEnum;
 
 class GameResultResource extends Resource
 {
-    use SuperAdminAccess;
-
     protected static ?string $model = AccountSnapshot::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-play-circle';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Game Results';
+    protected static string|UnitEnum|null $navigationGroup = '🎯 Game Results';
 
     protected static ?string $navigationLabel = 'Single Games';
 
     protected static ?int $navigationSort = 1;
 
     protected static ?string $slug = 'game-results';
+
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->hasPermissionTo('game-results.view') ?? false;
+    }
 
     public static function canCreate(): bool
     {

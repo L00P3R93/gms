@@ -19,9 +19,14 @@ class IncomeDistributionResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCurrencyDollar;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Financial';
+    protected static string|UnitEnum|null $navigationGroup = '📊 Financial';
 
     protected static ?int $navigationSort = 4;
+
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->hasPermissionTo('income-distributions.view') ?? false;
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -39,5 +44,10 @@ class IncomeDistributionResource extends Resource
             'index' => ListIncomeDistributions::route('/'),
             'view' => ViewIncomeDistribution::route('/{record}'),
         ];
+    }
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
     }
 }

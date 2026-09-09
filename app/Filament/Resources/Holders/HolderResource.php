@@ -8,7 +8,6 @@ use App\Filament\Resources\Holders\Pages\ListHolders;
 use App\Filament\Resources\Holders\Schemas\HolderForm;
 use App\Filament\Resources\Holders\Tables\HoldersTable;
 use App\Models\Holder;
-use App\Traits\SuperAdminAccess;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -17,13 +16,11 @@ use UnitEnum;
 
 class HolderResource extends Resource
 {
-    use SuperAdminAccess;
-
     protected static ?string $model = Holder::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-users';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Shareholders';
+    protected static string|UnitEnum|null $navigationGroup = '🤝 Shareholders';
 
     protected static ?int $navigationSort = 1;
 
@@ -48,8 +45,8 @@ class HolderResource extends Resource
     {
         return [
             'index' => ListHolders::route('/'),
-            'create' => CreateHolder::route('/create'),
-            'edit' => EditHolder::route('/{record}/edit'),
+            // 'create' => CreateHolder::route('/create'),
+            // 'edit' => EditHolder::route('/{record}/edit'),
         ];
     }
 }

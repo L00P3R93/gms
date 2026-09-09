@@ -7,6 +7,10 @@ use App\Enums\WithdrawType;
 use App\Models\Withdraw;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
+use Filament\Support\Enums\TextSize;
+use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\Layout\Split;
+use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
@@ -21,26 +25,32 @@ class WithdrawsTable
             ->striped()
             ->defaultSort('created_at', 'desc')
             ->columns([
-                TextColumn::make('id')
-                    ->label('#'),
-                TextColumn::make('receiver_name')
-                    ->label('Receiver'),
-                TextColumn::make('type')
-                    ->badge(),
-                TextColumn::make('phone'),
-                TextColumn::make('amount')
-                    ->prefix('KES '),
-                TextColumn::make('status')
-                    ->badge(),
-                TextColumn::make('receipt')
-                    ->copyable()
-                    ->placeholder('—'),
-                TextColumn::make('response')
-                    ->limit(40)
-                    ->placeholder('—'),
-                TextColumn::make('created_at')
-                    ->label('Date')
-                    ->date(),
+                Split::make([
+                    Stack::make([
+                        TextColumn::make('receiver_name')
+                            ->label('Receiver')
+                            ->weight('bold'),
+                        TextColumn::make('type')
+                            ->badge(),
+                    ]),
+                    Stack::make([
+                        TextColumn::make('amount')
+                            ->prefix('KES ')
+                            ->weight('bold'),
+                        TextColumn::make('status')
+                            ->badge(),
+                    ])->visibleFrom('md'),
+                    Stack::make([
+                        TextColumn::make('receipt')
+                            ->copyable()
+                            ->placeholder('—'),
+                        TextColumn::make('created_at')
+                            ->label('Date')
+                            ->date()
+                            ->color('gray')
+                            ->size(TextSize::Small),
+                    ])->visibleFrom('md'),
+                ])->from('md'),
             ])
             ->filters([
                 SelectFilter::make('status')
@@ -49,7 +59,7 @@ class WithdrawsTable
                     ->options(WithdrawType::class),
                 Filter::make('created_at')
                     ->label('Date Range')
-                    ->form([
+                    ->schema([
                         DatePicker::make('from')->label('From'),
                         DatePicker::make('until')->label('Until'),
                     ])
@@ -61,9 +71,10 @@ class WithdrawsTable
             ])
             ->recordActions([
                 Action::make('approve')
-                    ->label('Approve')
-                    ->icon('heroicon-o-check-circle')
+                    ->iconButton()
+                    ->icon(Heroicon::OutlinedCheckCircle)
                     ->color('success')
+                    ->tooltip('Approve Withdrawal')
                     ->requiresConfirmation()
                     ->action(function (Withdraw $record): void {
                         // Phase 5 — M-Pesa B2C logic

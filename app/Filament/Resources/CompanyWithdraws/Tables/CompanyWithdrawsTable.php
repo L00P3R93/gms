@@ -8,6 +8,10 @@ use App\Models\CompanyWithdraw;
 use App\Services\MpesaService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
+use Filament\Support\Enums\TextSize;
+use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\Layout\Split;
+use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -19,34 +23,49 @@ class CompanyWithdrawsTable
             ->striped()
             ->defaultSort('created_at', 'desc')
             ->columns([
-                TextColumn::make('id')
-                    ->label('#'),
-                TextColumn::make('phone'),
-                TextColumn::make('amount')
-                    ->prefix('KES '),
-                TextColumn::make('reason')
-                    ->limit(40),
-                TextColumn::make('status')
-                    ->badge(),
-                TextColumn::make('requester.name')
-                    ->label('Requested By'),
+                Split::make([
+                    Stack::make([
+                        TextColumn::make('phone')
+                            ->weight('bold'),
+                        TextColumn::make('reason')
+                            ->limit(40)
+                            ->color('gray')
+                            ->size(TextSize::Small),
+                    ]),
+                    Stack::make([
+                        TextColumn::make('amount')
+                            ->prefix('KES ')
+                            ->weight('bold'),
+                        TextColumn::make('status')
+                            ->badge(),
+                    ])->visibleFrom('md'),
+                    Stack::make([
+                        TextColumn::make('requester.name')
+                            ->label('Requested By'),
+                        TextColumn::make('created_at')
+                            ->label('Date')
+                            ->date()
+                            ->color('gray')
+                            ->size(TextSize::Small),
+                    ])->visibleFrom('md'),
+                ])->from('md'),
                 TextColumn::make('approver.name')
                     ->label('Approved By')
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('receipt')
                     ->label('M-Pesa Receipt')
                     ->copyable()
-                    ->placeholder('—'),
-                TextColumn::make('created_at')
-                    ->label('Date')
-                    ->date(),
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([])
             ->recordActions([
                 Action::make('approve')
-                    ->label('Approve & Pay')
-                    ->icon('heroicon-o-check-circle')
+                    ->iconButton()
+                    ->icon(Heroicon::OutlinedCheckCircle)
                     ->color('success')
+                    ->tooltip('Approve & Pay')
                     ->requiresConfirmation()
                     ->modalHeading('Approve Company Withdrawal')
                     ->modalDescription(fn (CompanyWithdraw $record) => "Send KES {$record->amount} to {$record->phone} via M-Pesa B2C. This cannot be undone.")
@@ -105,7 +124,7 @@ class CompanyWithdrawsTable
                             Notification::make()->title('M-Pesa B2C failed')->body($e->getMessage())->danger()->send();
                         }
                     })
-                    ->visible(fn (CompanyWithdraw $record) => $record->status === CompanyWithdrawStatus::Pending),
+                    ->visible(fn (CompanyWithdraw $record) => $record->status === CompanyWithdrawStatus::Pending && auth()->user()->hasPermissionTo('company-withdrawals.approve')),
             ])
             ->toolbarActions([]);
     }

@@ -2,26 +2,34 @@
 
 namespace App\Providers;
 
+use App\Models\AuditLog;
 use App\Models\CompanyWithdraw;
 use App\Models\Dependant;
 use App\Models\Expense;
 use App\Models\Holder;
+use App\Models\Payee;
+use App\Models\Payout;
 use App\Models\User;
 use App\Models\Withdraw;
+use App\Policies\AuditLogPolicy;
 use App\Policies\CompanyWithdrawPolicy;
 use App\Policies\DependantPolicy;
 use App\Policies\ExpensePolicy;
 use App\Policies\HolderPolicy;
+use App\Policies\PayeePolicy;
+use App\Policies\PayoutPolicy;
 use App\Policies\UserPolicy;
 use App\Policies\WithdrawPolicy;
 use App\Services\EncryptionService;
 use App\Services\GameApiService;
 use App\Services\MpesaService;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 
@@ -48,10 +56,20 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Expense::class, ExpensePolicy::class);
         Gate::policy(Withdraw::class, WithdrawPolicy::class);
         Gate::policy(CompanyWithdraw::class, CompanyWithdrawPolicy::class);
+        Gate::policy(Payee::class, PayeePolicy::class);
+        Gate::policy(Payout::class, PayoutPolicy::class);
+        Gate::policy(AuditLog::class, AuditLogPolicy::class);
     }
 
     protected function configureDefaults(): void
     {
+        Model::automaticallyEagerLoadRelationships();
+        Model::unguard();
+
+        if (app()->environment('production')) {
+            URL::forceHttps();
+        }
+
         Date::use(CarbonImmutable::class);
 
         DB::prohibitDestructiveCommands(

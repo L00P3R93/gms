@@ -40,6 +40,9 @@ class UserForm
                         ->unique(ignoreRecord: true)
                         ->prefixIcon(Heroicon::OutlinedEnvelope)
                         ->prefixIconColor('primary')
+                        ->extraInputAttributes([
+                            'autocomplete' => 'new-password',
+                        ])
                         ->columnSpanFull(),
                     TextInput::make('password')
                         ->password()
@@ -49,8 +52,11 @@ class UserForm
                         ->rule(Password::defaults())
                         ->prefixIcon(Heroicon::OutlinedLockClosed)
                         ->prefixIconColor('warning')
+                        ->extraInputAttributes([
+                            'autocomplete' => 'new-password',
+                        ])
                         ->columnSpanFull(),
-                ]),
+                ])->columns(2)->columnSpan(['lg' => 2]),
             Section::make('Access & Role')
                 ->description('Configure user role and account status.')
                 ->icon('heroicon-o-shield-check')
@@ -60,15 +66,17 @@ class UserForm
                         ->label('Role')
                         ->options(fn () => Role::pluck('name', 'name')->toArray())
                         ->required()
+                        ->native(false)
                         ->prefixIcon(Heroicon::OutlinedShieldCheck)
                         ->prefixIconColor('info'),
                     Select::make('status')
                         ->options(UserStatus::class)
                         ->enum(UserStatus::class)
                         ->required()
+                        ->native(false)
                         ->prefixIcon(Heroicon::OutlinedCheckCircle)
                         ->prefixIconColor('success'),
-                ]),
-        ]);
+                ])->columns(1)->columnSpan(['lg' => 1]),
+        ])->columns(3);
     }
 }

@@ -2,35 +2,59 @@
 
 namespace App\Filament\Resources\Roles\Tables;
 
-use Filament\Actions\DeleteAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Support\Enums\TextSize;
+use Filament\Tables\Columns\Layout\Split;
+use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Spatie\Permission\Models\Role;
 
 class RolesTable
 {
     public static function configure(Table $table): Table
     {
         return $table
-            ->striped()
             ->columns([
-                TextColumn::make('name')
-                    ->searchable(),
-                TextColumn::make('created_at')
-                    ->label('Created')
-                    ->date(),
+                Split::make([
+                    Stack::make([
+                        TextColumn::make('name')
+                            ->label('Role Name')
+                            ->weight('bold')
+                            ->sortable()
+                            ->searchable(),
+                        TextColumn::make('created_at')
+                            ->label('Created At')
+                            ->date()
+                            ->sortable()
+                            ->color('gray')
+                            ->size(TextSize::Small),
+                    ]),
+                    TextColumn::make('permissions.name')
+                        ->label('Permissions')
+                        ->badge()
+                        ->listWithLineBreaks(false)
+                        ->limitList(5)
+                        ->expandableLimitedList()
+                        ->visibleFrom('md'),
+                ])->from('md'),
+                TextColumn::make('updated_at')
+                    ->label('Updated At')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                //
             ])
             ->recordActions([
-                DeleteAction::make()
-                    ->before(function (Role $record): void {
-                        abort_if(
-                            in_array($record->name, ['super-admin', 'admin', 'director', 'agent']),
-                            403,
-                            'Cannot delete a protected role.'
-                        );
-                    })
-                    ->visible(fn (Role $record) => ! in_array($record->name, ['super-admin', 'admin', 'director', 'agent'])),
+                EditAction::make(),
             ])
-            ->toolbarActions([]);
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                ]),
+            ]);
     }
 }

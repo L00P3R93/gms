@@ -16,7 +16,6 @@ class CompanyWithdrawForm
         return $schema->components([
             Section::make('Withdrawal Request')
                 ->description('Submit a company wallet withdrawal.')
-                ->columns(2)
                 ->icon('heroicon-o-building-library')
                 ->schema([
                     TextInput::make('phone')
@@ -47,7 +46,7 @@ class CompanyWithdrawForm
                         ->required()
                         ->columnSpanFull()
                         ->rows(3),
-                ]),
-        ]);
+                ])->columns(2)->columnSpan(['lg' => 3]),
+        ])->columns(3);
     }
 }

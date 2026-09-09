@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\CompanyWithdrawStatus;
+use App\Enums\PayoutStatus;
 use App\Enums\WithdrawStatus;
 use App\Http\Controllers\Controller;
 use App\Models\CompanyWithdraw;
+use App\Models\Payout;
 use App\Models\Withdraw;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -49,6 +51,18 @@ class MpesaB2CResultController extends Controller
 
         if ($companyWithdraw) {
             $companyWithdraw->update(['status' => $companyWithdrawStatus, 'response' => $resultDesc]);
+        }
+
+        $payoutStatus = $resultCode == 0
+            ? PayoutStatus::Completed->value
+            : PayoutStatus::Failed->value;
+
+        $payout = Payout::where('receipt', $conversationId)
+            ->orWhere('conversation_id', $conversationId)
+            ->first();
+
+        if ($payout) {
+            $payout->update(['status' => $payoutStatus, 'response' => $resultDesc]);
         }
 
         return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Accepted']);

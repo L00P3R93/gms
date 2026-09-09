@@ -8,7 +8,6 @@ use App\Filament\Resources\CompanyWithdraws\Pages\ListCompanyWithdraws;
 use App\Filament\Resources\CompanyWithdraws\Schemas\CompanyWithdrawForm;
 use App\Filament\Resources\CompanyWithdraws\Tables\CompanyWithdrawsTable;
 use App\Models\CompanyWithdraw;
-use App\Traits\SuperAdminAccess;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -17,13 +16,11 @@ use UnitEnum;
 
 class CompanyWithdrawResource extends Resource
 {
-    use SuperAdminAccess;
-
     protected static ?string $model = CompanyWithdraw::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-building-library';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Financial';
+    protected static string|UnitEnum|null $navigationGroup = '📊 Financial';
 
     public static function form(Schema $schema): Schema
     {
@@ -46,8 +43,8 @@ class CompanyWithdrawResource extends Resource
     {
         return [
             'index' => ListCompanyWithdraws::route('/'),
-            'create' => CreateCompanyWithdraw::route('/create'),
-            'edit' => EditCompanyWithdraw::route('/{record}/edit'),
+            // 'create' => CreateCompanyWithdraw::route('/create'),
+            // 'edit' => EditCompanyWithdraw::route('/{record}/edit'),
         ];
     }
 }

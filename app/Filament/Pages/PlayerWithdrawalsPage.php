@@ -8,6 +8,9 @@ use App\Support\Format;
 use App\Traits\SuperAdminAccess;
 use BackedEnum;
 use Filament\Pages\Page;
+use Filament\Support\Enums\TextSize;
+use Filament\Tables\Columns\Layout\Split;
+use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
@@ -25,7 +28,7 @@ class PlayerWithdrawalsPage extends Page implements HasTable
 
     protected static ?string $navigationLabel = 'Player Withdrawals';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Financial';
+    protected static string|UnitEnum|null $navigationGroup = '📊 Financial';
 
     protected static ?int $navigationSort = 2;
 
@@ -46,24 +49,37 @@ class PlayerWithdrawalsPage extends Page implements HasTable
                 sortDirection: $sortDirection,
             ))
             ->columns([
-                TextColumn::make('transaction_id')
-                    ->label('Transaction ID')
-                    ->searchable()
-                    ->copyable(),
-                TextColumn::make('name')
-                    ->label('Player Name')
-                    ->searchable()
-                    ->sortable(),
-                TextColumn::make('phone')
-                    ->label('Phone')
-                    ->searchable(),
-                TextColumn::make('amount')
-                    ->label('Amount')
-                    ->sortable()
-                    ->formatStateUsing(fn ($state): string => Format::money($state)),
-                TextColumn::make('date')
-                    ->label('Date')
-                    ->sortable(),
+                Split::make([
+                    Stack::make([
+                        TextColumn::make('name')
+                            ->label('Player Name')
+                            ->weight('bold')
+                            ->searchable()
+                            ->sortable(),
+                        TextColumn::make('phone')
+                            ->label('Phone')
+                            ->searchable()
+                            ->color('gray')
+                            ->size(TextSize::Small),
+                    ]),
+                    Stack::make([
+                        TextColumn::make('amount')
+                            ->label('Amount')
+                            ->sortable()
+                            ->weight('bold')
+                            ->formatStateUsing(fn ($state): string => Format::money($state)),
+                        TextColumn::make('date')
+                            ->label('Date')
+                            ->sortable()
+                            ->color('gray')
+                            ->size(TextSize::Small),
+                    ])->visibleFrom('md'),
+                    TextColumn::make('transaction_id')
+                        ->label('Transaction ID')
+                        ->searchable()
+                        ->copyable()
+                        ->visibleFrom('md'),
+                ])->from('md'),
             ])
             ->emptyStateIcon('heroicon-o-arrow-up-tray')
             ->emptyStateHeading(fn (): string => $this->apiError ? 'Withdrawals unavailable' : 'No withdrawals found')

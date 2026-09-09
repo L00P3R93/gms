@@ -8,6 +8,7 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\NavigationGroup;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
@@ -25,11 +26,11 @@ class AdminPanelProvider extends PanelProvider
     {
         return $panel
             ->default()
-            ->id('admin')
+            ->id('console')
             ->path('')
             ->login()
             ->profile(EditProfile::class, isSimple: false)
-            ->brandName('Kadi Kings GMS')
+            ->brandName('Kadi GMS')
             ->colors([
                 'primary' => Color::Amber,
                 'secondary' => Color::Gray,
@@ -71,12 +72,14 @@ class AdminPanelProvider extends PanelProvider
                 Authenticate::class,
             ])
             ->navigationGroups([
-                'Players',
-                'Financial',
-                'Shareholders',
-                'Game Results',
-                'Reports',
-                'Administration',
+                NavigationGroup::make('🎮 Players'),
+                NavigationGroup::make('💸 Expenses & Payouts'),
+                NavigationGroup::make('📊 Financial'),
+                NavigationGroup::make('🤝 Shareholders'),
+                NavigationGroup::make('🎯 Game Results'),
+                NavigationGroup::make('📈 Reports'),
+                NavigationGroup::make('👥 Access Management'),
+                NavigationGroup::make('⚙️ Administration'),
             ]);
     }
 }

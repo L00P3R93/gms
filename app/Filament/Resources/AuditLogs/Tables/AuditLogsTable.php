@@ -3,6 +3,9 @@
 namespace App\Filament\Resources\AuditLogs\Tables;
 
 use Filament\Forms\Components\DatePicker;
+use Filament\Support\Enums\TextSize;
+use Filament\Tables\Columns\Layout\Split;
+use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
@@ -17,29 +20,39 @@ class AuditLogsTable
             ->striped()
             ->defaultSort('created_at', 'desc')
             ->columns([
-                TextColumn::make('user.name')
-                    ->label('Actor')
-                    ->placeholder('System')
-                    ->searchable(),
-                TextColumn::make('auditable_type')
-                    ->label('Model')
-                    ->formatStateUsing(fn (string $state): string => class_basename($state)),
-                TextColumn::make('auditable_id')
-                    ->label('ID'),
-                TextColumn::make('event')
-                    ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        'created' => 'success',
-                        'updated' => 'warning',
-                        'deleted' => 'danger',
-                        default => 'gray',
-                    }),
-                TextColumn::make('ip_address')
-                    ->label('IP Address'),
-                TextColumn::make('created_at')
-                    ->label('When')
-                    ->since()
-                    ->sortable(),
+                Split::make([
+                    Stack::make([
+                        TextColumn::make('user.name')
+                            ->label('Actor')
+                            ->weight('bold')
+                            ->placeholder('System')
+                            ->searchable(),
+                        TextColumn::make('auditable_type')
+                            ->label('Model')
+                            ->formatStateUsing(fn (string $state): string => class_basename($state))
+                            ->color('gray')
+                            ->size(TextSize::Small),
+                    ]),
+                    Stack::make([
+                        TextColumn::make('event')
+                            ->badge()
+                            ->color(fn (string $state): string => match ($state) {
+                                'created' => 'success',
+                                'updated' => 'warning',
+                                'deleted' => 'danger',
+                                default => 'gray',
+                            }),
+                        TextColumn::make('created_at')
+                            ->label('When')
+                            ->since()
+                            ->sortable()
+                            ->color('gray')
+                            ->size(TextSize::Small),
+                    ])->visibleFrom('md'),
+                    TextColumn::make('ip_address')
+                        ->label('IP Address')
+                        ->visibleFrom('md'),
+                ])->from('md'),
             ])
             ->filters([
                 SelectFilter::make('event')

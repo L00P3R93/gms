@@ -4,20 +4,17 @@ namespace App\Filament\Resources\RobotResults;
 
 use App\Filament\Resources\RobotResults\Pages\ListRobotResults;
 use App\Models\AccountSnapshot;
-use App\Traits\SuperAdminAccess;
 use BackedEnum;
 use Filament\Resources\Resource;
 use UnitEnum;
 
 class RobotResultResource extends Resource
 {
-    use SuperAdminAccess;
-
     protected static ?string $model = AccountSnapshot::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-cpu-chip';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Game Results';
+    protected static string|UnitEnum|null $navigationGroup = '🎯 Game Results';
 
     protected static ?string $navigationLabel = 'Robot Games';
 
@@ -26,6 +23,11 @@ class RobotResultResource extends Resource
     protected static ?string $slug = 'robot-results';
 
     protected static bool $shouldRegisterNavigation = false;
+
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->hasPermissionTo('game-results.view') ?? false;
+    }
 
     public static function canCreate(): bool
     {

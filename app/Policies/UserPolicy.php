@@ -8,22 +8,22 @@ class UserPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->hasRole('super-admin');
+        return $user->hasPermissionTo('users.view');
     }
 
     public function view(User $user, User $model): bool
     {
-        return $user->hasRole('super-admin');
+        return $user->hasPermissionTo('users.view');
     }
 
     public function create(User $user): bool
     {
-        return $user->hasRole('super-admin');
+        return $user->hasPermissionTo('users.create');
     }
 
     public function update(User $user, User $model): bool
     {
-        return $user->hasRole('super-admin');
+        return $user->hasPermissionTo('users.edit');
     }
 
     public function delete(User $user, User $model): bool

@@ -8,6 +8,9 @@ use App\Support\Format;
 use App\Traits\SuperAdminAccess;
 use BackedEnum;
 use Filament\Pages\Page;
+use Filament\Support\Enums\TextSize;
+use Filament\Tables\Columns\Layout\Split;
+use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
@@ -53,39 +56,55 @@ class JackpotAwardsPage extends Page implements HasTable
                 sortDirection: $sortDirection,
             ))
             ->columns([
-                TextColumn::make('competition_id')
-                    ->label('Competition ID')
-                    ->searchable(),
-                TextColumn::make('name')
-                    ->label('Winner')
-                    ->searchable(),
-                TextColumn::make('jp_rounds')
-                    ->label('Tier')
-                    ->badge()
-                    ->formatStateUsing(fn ($state): string => match ((int) $state) {
-                        21 => 'Gold (21)',
-                        17 => 'Silver (17)',
-                        13 => 'Bronze (13)',
-                        default => (string) ($state ?? '—'),
-                    })
-                    ->color(fn ($state): string => match ((int) $state) {
-                        21 => 'warning',
-                        17 => 'gray',
-                        13 => 'danger',
-                        default => 'gray',
-                    }),
-                TextColumn::make('amount')
-                    ->label('Prize Amount')
-                    ->sortable()
-                    ->formatStateUsing(fn ($state): string => Format::money($state)),
-                TextColumn::make('income')
-                    ->label('House Income')
-                    ->sortable()
-                    ->formatStateUsing(fn ($state): string => Format::money($state)),
-                TextColumn::make('created_at')
-                    ->label('Date')
-                    ->sortable()
-                    ->formatStateUsing(fn ($state): string => Format::dateTime($state)),
+                Split::make([
+                    Stack::make([
+                        TextColumn::make('name')
+                            ->label('Winner')
+                            ->weight('bold')
+                            ->searchable(),
+                        TextColumn::make('jp_rounds')
+                            ->label('Tier')
+                            ->badge()
+                            ->formatStateUsing(fn ($state): string => match ((int) $state) {
+                                21 => 'Gold (21)',
+                                17 => 'Silver (17)',
+                                13 => 'Bronze (13)',
+                                default => (string) ($state ?? '—'),
+                            })
+                            ->color(fn ($state): string => match ((int) $state) {
+                                21 => 'warning',
+                                17 => 'gray',
+                                13 => 'danger',
+                                default => 'gray',
+                            }),
+                    ]),
+                    Stack::make([
+                        TextColumn::make('amount')
+                            ->label('Prize Amount')
+                            ->sortable()
+                            ->weight('bold')
+                            ->formatStateUsing(fn ($state): string => Format::money($state)),
+                        TextColumn::make('income')
+                            ->label('House Income')
+                            ->sortable()
+                            ->color('gray')
+                            ->size(TextSize::Small)
+                            ->formatStateUsing(fn ($state): string => Format::money($state)),
+                    ])->visibleFrom('md'),
+                    Stack::make([
+                        TextColumn::make('created_at')
+                            ->label('Date')
+                            ->sortable()
+                            ->color('gray')
+                            ->size(TextSize::Small)
+                            ->formatStateUsing(fn ($state): string => Format::dateTime($state)),
+                        TextColumn::make('competition_id')
+                            ->label('Competition ID')
+                            ->searchable()
+                            ->color('gray')
+                            ->size(TextSize::Small),
+                    ])->visibleFrom('md'),
+                ])->from('md'),
             ])
             ->defaultSort('created_at', 'desc')
             ->emptyStateIcon('heroicon-o-star')

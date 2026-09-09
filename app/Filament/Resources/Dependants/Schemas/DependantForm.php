@@ -16,7 +16,6 @@ class DependantForm
     {
         return $schema->components([
             Section::make('Dependant Details')
-                ->columns(2)
                 ->icon('heroicon-o-user-group')
                 ->schema([
                     Select::make('holder_id')
@@ -24,6 +23,7 @@ class DependantForm
                         ->options(fn () => Holder::pluck('name', 'id')->toArray())
                         ->searchable()
                         ->required()
+                        ->native(false)
                         ->prefixIcon(Heroicon::OutlinedUser)
                         ->prefixIconColor('primary')
                         ->columnSpanFull(),
@@ -49,18 +49,18 @@ class DependantForm
                         ->suffix('%')
                         ->prefixIcon(Heroicon::OutlinedChartPie)
                         ->prefixIconColor('warning'),
-                ]),
+                ])->columns(2)->columnSpan(['lg' => 2]),
             Section::make('Status')
-                ->columns(1)
                 ->icon('heroicon-o-check-badge')
                 ->schema([
                     Select::make('status')
                         ->options(DependantStatus::class)
                         ->enum(DependantStatus::class)
                         ->required()
+                        ->native(false)
                         ->prefixIcon(Heroicon::OutlinedCheckCircle)
                         ->prefixIconColor('success'),
-                ]),
-        ]);
+                ])->columns(1)->columnSpan(['lg' => 1]),
+        ])->columns(3);
     }
 }

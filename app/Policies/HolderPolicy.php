@@ -9,22 +9,22 @@ class HolderPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->hasRole('super-admin');
+        return $user->hasPermissionTo('holders.view');
     }
 
     public function view(User $user, Holder $holder): bool
     {
-        return $user->hasRole('super-admin');
+        return $user->hasPermissionTo('holders.view');
     }
 
     public function create(User $user): bool
     {
-        return $user->hasRole('super-admin');
+        return $user->hasPermissionTo('holders.create');
     }
 
     public function update(User $user, Holder $holder): bool
     {
-        return $user->hasRole('super-admin');
+        return $user->hasPermissionTo('holders.edit');
     }
 
     public function delete(User $user, Holder $holder): bool

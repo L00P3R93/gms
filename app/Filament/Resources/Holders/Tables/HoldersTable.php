@@ -5,6 +5,8 @@ namespace App\Filament\Resources\Holders\Tables;
 use App\Enums\HolderStatus;
 use App\Enums\WithdrawStatus;
 use App\Enums\WithdrawType;
+use App\Filament\Exports\HolderExporter;
+use App\Filament\Imports\HolderImporter;
 use App\Filament\Resources\Dependants\DependantResource;
 use App\Models\Holder;
 use App\Models\Withdraw;
@@ -13,8 +15,14 @@ use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ImportAction;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Filament\Support\Enums\TextSize;
+use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Columns\Layout\Split;
+use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -26,31 +34,52 @@ class HoldersTable
         return $table
             ->striped()
             ->columns([
-                TextColumn::make('name')
-                    ->searchable(),
-                TextColumn::make('phone'),
-                TextColumn::make('id_no')
-                    ->label('ID Number'),
-                TextColumn::make('share_percent')
-                    ->label('Share %')
-                    ->suffix('%'),
-                TextColumn::make('wallet.balance')
-                    ->label('Wallet Balance')
-                    ->prefix('KES ')
-                    ->numeric(2),
-                TextColumn::make('status')
-                    ->badge(),
+                Split::make([
+                    Stack::make([
+                        TextColumn::make('name')
+                            ->weight('bold')
+                            ->searchable(),
+                        TextColumn::make('phone')
+                            ->color('gray')
+                            ->size(TextSize::Small),
+                    ]),
+                    Stack::make([
+                        TextColumn::make('wallet.balance')
+                            ->label('Wallet Balance')
+                            ->prefix('KES ')
+                            ->numeric(2)
+                            ->weight('bold'),
+                        TextColumn::make('share_percent')
+                            ->label('Share %')
+                            ->suffix('%')
+                            ->color('gray')
+                            ->size(TextSize::Small),
+                    ])->visibleFrom('md'),
+                    Stack::make([
+                        TextColumn::make('status')
+                            ->badge(),
+                        TextColumn::make('id_no')
+                            ->label('ID')
+                            ->color('gray')
+                            ->size(TextSize::Small),
+                    ])->visibleFrom('md'),
+                ])->from('md'),
             ])
             ->filters([
                 SelectFilter::make('status')
                     ->options(HolderStatus::class),
             ])
             ->recordActions([
-                EditAction::make(),
-                Action::make('withdraw')
-                    ->label('Withdraw')
-                    ->icon('heroicon-o-banknotes')
+                EditAction::make()
+                    ->iconButton()
+                    ->icon(Heroicon::OutlinedPencilSquare)
                     ->color('warning')
+                    ->tooltip('Edit Holder'),
+                Action::make('withdraw')
+                    ->iconButton()
+                    ->icon('heroicon-o-banknotes')
+                    ->color('success')
+                    ->tooltip('Withdraw Funds')
                     ->requiresConfirmation(false)
                     ->form([
                         TextInput::make('amount')
@@ -124,13 +153,26 @@ class HoldersTable
                     })
                     ->visible(fn (Holder $record) => $record->status === HolderStatus::Active),
                 Action::make('view_dependants')
-                    ->label('Dependants')
+                    ->iconButton()
                     ->icon('heroicon-o-user-group')
+                    ->color('info')
+                    ->tooltip('View Dependants')
                     ->url(fn (Holder $record) => DependantResource::getUrl('index', [
                         'tableFilters[holder_id][value]' => $record->id,
                     ])),
             ])
             ->toolbarActions([
+                ImportAction::make()
+                    ->label('Import Holders')
+                    ->icon('hugeicons-file-import')
+                    ->color('info')
+                    ->importer(HolderImporter::class),
+
+                ExportAction::make()
+                    ->label('Export Holders')
+                    ->icon('hugeicons-file-export')
+                    ->color('success')
+                    ->exporter(HolderExporter::class),
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),

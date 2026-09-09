@@ -18,9 +18,14 @@ class ApiIncomeLogResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedServer;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Financial';
+    protected static string|UnitEnum|null $navigationGroup = '📊 Financial';
 
     protected static ?int $navigationSort = 6;
+
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->hasPermissionTo('api-income-logs.view') ?? false;
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -37,5 +42,10 @@ class ApiIncomeLogResource extends Resource
         return [
             'index' => ListApiIncomeLogs::route('/'),
         ];
+    }
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
     }
 }

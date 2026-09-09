@@ -1,13 +1,13 @@
 [
     {
-        "name": "Angel Palace",
-        "userName": "angel_palace",
-        "email": "angelpalace@mail.com",
+        "name": "Kizuka Na Michezo Ltd",
+        "userName": "kizuka",
+        "email": "kizuka@mail.com",
         "phone": "0712345678",
         "id_no": null,
         "share": 0.40,
         "role": "director",
-        "password": "Angel@123456"
+        "password": "Kizuka@123456"
     },
     {
         "name": "Kennedy Mutia",

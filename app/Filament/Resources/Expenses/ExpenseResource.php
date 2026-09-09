@@ -8,7 +8,6 @@ use App\Filament\Resources\Expenses\Pages\ListExpenses;
 use App\Filament\Resources\Expenses\Schemas\ExpenseForm;
 use App\Filament\Resources\Expenses\Tables\ExpensesTable;
 use App\Models\Expense;
-use App\Traits\SuperAdminAccess;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -17,15 +16,13 @@ use UnitEnum;
 
 class ExpenseResource extends Resource
 {
-    use SuperAdminAccess;
-
     protected static ?string $model = Expense::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-banknotes';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Financial';
+    protected static string|UnitEnum|null $navigationGroup = '💸 Expenses & Payouts';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 0;
 
     public static function form(Schema $schema): Schema
     {
@@ -48,8 +45,8 @@ class ExpenseResource extends Resource
     {
         return [
             'index' => ListExpenses::route('/'),
-            'create' => CreateExpense::route('/create'),
-            'edit' => EditExpense::route('/{record}/edit'),
+            // 'create' => CreateExpense::route('/create'),
+            // 'edit' => EditExpense::route('/{record}/edit'),
         ];
     }
 }

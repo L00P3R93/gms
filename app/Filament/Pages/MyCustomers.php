@@ -7,6 +7,9 @@ use App\Support\ApiTablePaginator;
 use App\Support\Format;
 use BackedEnum;
 use Filament\Pages\Page;
+use Filament\Support\Enums\TextSize;
+use Filament\Tables\Columns\Layout\Split;
+use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
@@ -46,22 +49,30 @@ class MyCustomers extends Page implements HasTable
                 sortDirection: $sortDirection ?? 'desc',
             ))
             ->columns([
-                TextColumn::make('id')
-                    ->label('#')
-                    ->sortable(),
-                TextColumn::make('name')
-                    ->searchable()
-                    ->sortable(),
-                TextColumn::make('phone_no')
-                    ->label('Phone')
-                    ->searchable()
-                    ->formatStateUsing(fn ($state): string => Format::maskedPhone($state)),
-                TextColumn::make('email')
-                    ->searchable(),
-                TextColumn::make('referral_code')
-                    ->label('Referral Code')
-                    ->badge()
-                    ->color('info'),
+                Split::make([
+                    Stack::make([
+                        TextColumn::make('name')
+                            ->weight('bold')
+                            ->searchable()
+                            ->sortable(),
+                        TextColumn::make('phone_no')
+                            ->label('Phone')
+                            ->searchable()
+                            ->formatStateUsing(fn ($state): string => Format::maskedPhone($state))
+                            ->color('gray')
+                            ->size(TextSize::Small),
+                    ]),
+                    Stack::make([
+                        TextColumn::make('email')
+                            ->searchable()
+                            ->color('gray')
+                            ->size(TextSize::Small),
+                        TextColumn::make('referral_code')
+                            ->label('Referral Code')
+                            ->badge()
+                            ->color('info'),
+                    ])->visibleFrom('md'),
+                ])->from('md'),
             ])
             ->emptyStateIcon('heroicon-o-user-circle')
             ->emptyStateHeading(fn (): string => $this->apiError ? 'Customers unavailable' : 'No customers found')
