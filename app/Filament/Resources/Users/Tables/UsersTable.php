@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Users\Tables;
 
 use App\Enums\UserStatus;
+use App\Models\User;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -66,7 +67,28 @@ class UsersTable
                     ->relationship('roles', 'name'),
             ])
             ->recordActions([
-                EditAction::make()->iconButton()->icon(Heroicon::OutlinedPencilSquare)->color('warning')->tooltip('Edit User'),
+                EditAction::make()
+                    ->iconButton()
+                    ->icon(Heroicon::OutlinedPencilSquare)
+                    ->color('warning')
+                    ->tooltip('Edit User')
+                    ->mutateRecordDataUsing(function (array $data, User $record): array {
+                        $data['role'] = $record->roles->first()?->name;
+
+                        return $data;
+                    })
+                    ->using(function (User $record, array $data): User {
+                        $role = $data['role'] ?? null;
+                        unset($data['role']);
+
+                        $record->update($data);
+
+                        if ($role) {
+                            $record->syncRoles([$role]);
+                        }
+
+                        return $record;
+                    }),
                 DeleteAction::make()->iconButton()->icon(Heroicon::OutlinedTrash)->color('danger')->tooltip('Delete User'),
                 Impersonate::make()
                     ->iconButton()
