@@ -56,15 +56,21 @@ class GameApiService
         array $body = [],
         array $query = [],
         int $timeout = 8,
-        int $connectTimeout = 5
+        int $connectTimeout = 5,
+        ?string $idempotencyKey = null
     ): array {
         $url = $this->baseUrl.$path;
 
-        $pending = Http::withHeaders([
+        $headers = [
             'X-API-KEY' => $this->apiKey,
-            'Idempotency-Key' => Str::uuid()->toString(),
             'Accept' => 'application/json',
-        ])->timeout($timeout)->connectTimeout($connectTimeout);
+        ];
+
+        if (strtoupper($method) !== 'GET') {
+            $headers['Idempotency-Key'] = $idempotencyKey ?? Str::uuid()->toString();
+        }
+
+        $pending = Http::withHeaders($headers)->timeout($timeout)->connectTimeout($connectTimeout);
 
         try {
             $response = match (strtoupper($method)) {
@@ -114,9 +120,9 @@ class GameApiService
      * TASK-002: Encrypt ID via the API's own endpoint (fallback / one-off use only).
      * Prefer the local encryptId() method — it's faster and avoids a network round-trip.
      */
-    public function encryptIdViaApi(string $plainId): string
+    public function encryptIdViaApi(string $plainId, ?string $idempotencyKey = null): string
     {
-        return $this->makeRequest('POST', '/encrypt', ['identifier' => $plainId])['encrypted_id'] ?? '';
+        return $this->makeRequest('POST', '/encrypt', ['identifier' => $plainId], idempotencyKey: $idempotencyKey)['encrypted_id'] ?? '';
     }
 
     /**
@@ -168,9 +174,11 @@ class GameApiService
      *
      * @param  array{account_no: string, name: string, email: string, id_no?: string, phone_no?: string, referral_code?: string}  $data
      */
-    public function createCustomer(array $data): array
+    public function createCustomer(array $data, ?string $idempotencyKey = null): array
     {
-        return $this->makeRequest('POST', '/customers', $data);
+        $key = $idempotencyKey ?? 'customer-create-'.($data['account_no'] ?? $data['google_id'] ?? Str::uuid()->toString());
+
+        return $this->makeRequest('POST', '/customers', $data, idempotencyKey: $key);
     }
 
     /**
@@ -197,12 +205,12 @@ class GameApiService
      * TASK-007: Create a new game wallet for a game round.
      * Endpoint: POST /api/v1/game/wallets
      */
-    public function createGameWallet(string $gameId, int $gameType = 1): array
+    public function createGameWallet(string $gameId, int $gameType = 1, ?string $idempotencyKey = null): array
     {
         return $this->makeRequest('POST', '/game/wallets', [
             'game_id' => $gameId,
             'game_type' => $gameType,
-        ]);
+        ], idempotencyKey: $idempotencyKey);
     }
 
     /**
@@ -211,7 +219,7 @@ class GameApiService
      *
      * @throws GameApiException with "Insufficient balance" message on HTTP 400
      */
-    public function placeBet(int $gameWalletId, int $customerId, float $amount): array
+    public function placeBet(int $gameWalletId, int $customerId, float $amount, ?string $idempotencyKey = null): array
     {
         try {
             return $this->makeRequest('POST', '/game/bets', [
@@ -219,7 +227,7 @@ class GameApiService
                 'customer_id' => $customerId,
                 'payment_type' => 'deposit',
                 'amount' => $amount,
-            ]);
+            ], idempotencyKey: $idempotencyKey);
         } catch (GameApiException $e) {
             if ($e->statusCode === 400) {
                 throw new GameApiException('Insufficient balance', 400, 'Insufficient balance');
@@ -234,13 +242,13 @@ class GameApiService
      *
      * Note: customer_id must be cast to string in the request body (API requirement).
      */
-    public function payoutGame(int $gameWalletId, int $winnerId): array
+    public function payoutGame(int $gameWalletId, int $winnerId, ?string $idempotencyKey = null): array
     {
         $enc = $this->encryptId((string) $gameWalletId);
 
         return $this->makeRequest('POST', "/game/withdraw/{$enc}", [
             'customer_id' => (string) $winnerId,
-        ]);
+        ], idempotencyKey: $idempotencyKey);
     }
 
     /**
@@ -254,7 +262,8 @@ class GameApiService
         array $players,
         array $active,
         array $dropped,
-        bool $gameStarted = true
+        bool $gameStarted = true,
+        ?string $idempotencyKey = null
     ): array {
         $enc = $this->encryptId((string) $gameWalletId);
 
@@ -263,7 +272,7 @@ class GameApiService
             'active' => $active,
             'dropped' => $dropped,
             'game' => $gameStarted ? 1 : 0,
-        ]);
+        ], idempotencyKey: $idempotencyKey);
     }
 
     /**
@@ -274,9 +283,9 @@ class GameApiService
      *
      * @param  array{competition_id: string, cmp_uid: string, game_type: int, customer_id: int, jp_rounds: int}  $data
      */
-    public function createCompetitionWallet(array $data): array
+    public function createCompetitionWallet(array $data, ?string $idempotencyKey = null): array
     {
-        return $this->makeRequest('POST', '/competition/wallets', $data);
+        return $this->makeRequest('POST', '/competition/wallets', $data, idempotencyKey: $idempotencyKey);
     }
 
     /**
@@ -284,39 +293,39 @@ class GameApiService
      * Endpoint: POST /api/v1/competition/transactions
      * Tournament: 85% to comp wallet, 15% to house. Jackpot: 80% to comp wallet, 20% to house.
      */
-    public function recordCompetitionEntry(int $competitionWalletId, int $customerId, float $amount): array
+    public function recordCompetitionEntry(int $competitionWalletId, int $customerId, float $amount, ?string $idempotencyKey = null): array
     {
         return $this->makeRequest('POST', '/competition/transactions', [
             'competition_wallet_id' => $competitionWalletId,
             'customer_id' => $customerId,
             'payment_type' => 'deposit',
             'amount' => $amount,
-        ]);
+        ], idempotencyKey: $idempotencyKey);
     }
 
     /**
      * TASK-013: Process a competition match result (loser → winner balance transfer).
      * Endpoint: POST /api/v1/competition/payout
      */
-    public function processCompetitionMatchResult(int $loserWalletId, int $winnerWalletId): array
+    public function processCompetitionMatchResult(int $loserWalletId, int $winnerWalletId, ?string $idempotencyKey = null): array
     {
         return $this->makeRequest('POST', '/competition/payout', [
             'sender_competition_wallet_id' => $loserWalletId,
             'receiver_competition_wallet_id' => $winnerWalletId,
-        ]);
+        ], idempotencyKey: $idempotencyKey);
     }
 
     /**
      * TASK-014: Pay out the competition winner's balance to their main wallet.
      * Endpoint: POST /api/v1/competition/withdraw/{enc}
      */
-    public function withdrawCompetitionWinnings(int $competitionWalletId, int $customerId): array
+    public function withdrawCompetitionWinnings(int $competitionWalletId, int $customerId, ?string $idempotencyKey = null): array
     {
         $enc = $this->encryptId((string) $competitionWalletId);
 
         return $this->makeRequest('POST', "/competition/withdraw/{$enc}", [
             'customer_id' => (string) $customerId,
-        ]);
+        ], idempotencyKey: $idempotencyKey);
     }
 
     /**
@@ -326,13 +335,13 @@ class GameApiService
      * BUG B5: This endpoint can return a null body on exception — handled in makeRequest()
      * by defaulting to []. The actual wallet credit happens asynchronously via C2B callback.
      */
-    public function triggerStkPush(int $customerId, float $amount): array
+    public function triggerStkPush(int $customerId, float $amount, ?string $idempotencyKey = null): array
     {
         $enc = $this->encryptId((string) $customerId);
 
         return $this->makeRequest('POST', "/deposits/{$enc}", [
             'amount' => (int) $amount,
-        ]);
+        ], idempotencyKey: $idempotencyKey);
     }
 
     /**
@@ -345,7 +354,8 @@ class GameApiService
         string $type,
         float $coinValue = 0,
         string $phoneNo = '',
-        string $referralCode = ''
+        string $referralCode = '',
+        ?string $idempotencyKey = null
     ): array {
         $enc = $this->encryptId((string) $customerId);
         $body = ['amount' => $amount, 'type' => $type];
@@ -360,7 +370,7 @@ class GameApiService
             $body['referral_code'] = $referralCode;
         }
 
-        return $this->makeRequest('POST', "/load/{$enc}", $body);
+        return $this->makeRequest('POST', "/load/{$enc}", $body, idempotencyKey: $idempotencyKey);
     }
 
     // -------------------------------------------------------------------------
@@ -373,7 +383,7 @@ class GameApiService
      */
     public function getDashboardStats(): array
     {
-        $headers = ['X-API-KEY' => $this->apiKey, 'Accept' => 'application/json', 'Idempotency-Key' => Str::uuid()->toString()];
+        $headers = ['X-API-KEY' => $this->apiKey, 'Accept' => 'application/json'];
         $base = $this->baseUrl;
 
         $responses = Http::pool(fn (Pool $pool) => [
@@ -429,12 +439,12 @@ class GameApiService
      * Endpoint: POST /api/v1/customers/leaderboard
      * Returns: { single_leaderboard: [...], competitions_leaderboard: [...] }
      */
-    public function getLeaderboard(string $startDate, string $endDate): array
+    public function getLeaderboard(string $startDate, string $endDate, ?string $idempotencyKey = null): array
     {
         return $this->makeRequest('POST', '/customers/leaderboard', [
             'start_date' => $startDate,
             'end_date' => $endDate,
-        ]);
+        ], idempotencyKey: $idempotencyKey);
     }
 
     /**
@@ -489,11 +499,11 @@ class GameApiService
      * TASK-023: Purchase coins for a customer (KES 10 = 1 coin, floor division).
      * Endpoint: POST /api/v1/coins/buy/{enc}
      */
-    public function buyCoins(int $customerId, float $amount): array
+    public function buyCoins(int $customerId, float $amount, ?string $idempotencyKey = null): array
     {
         $enc = $this->encryptId((string) $customerId);
 
-        return $this->makeRequest('POST', "/coins/buy/{$enc}", ['amount' => $amount]);
+        return $this->makeRequest('POST', "/coins/buy/{$enc}", ['amount' => $amount], idempotencyKey: $idempotencyKey);
     }
 
     /**
@@ -502,12 +512,12 @@ class GameApiService
      *
      * @param  int|null  $coins  Coins to exchange; omit to exchange all.
      */
-    public function exchangeCoins(int $coinWalletId, ?int $coins = null): array
+    public function exchangeCoins(int $coinWalletId, ?int $coins = null, ?string $idempotencyKey = null): array
     {
         $enc = $this->encryptId((string) $coinWalletId);
         $body = $coins !== null ? ['coins' => $coins] : [];
 
-        return $this->makeRequest('PUT', "/coins/exchange/{$enc}", $body);
+        return $this->makeRequest('PUT', "/coins/exchange/{$enc}", $body, idempotencyKey: $idempotencyKey);
     }
 
     /**
@@ -520,12 +530,12 @@ class GameApiService
      *
      * @param  string  $type  "deposit" | "withdraw" | "all"
      */
-    public function getCustomerTransactions(int $customerId, string $type = 'all'): array
+    public function getCustomerTransactions(int $customerId, string $type = 'all', ?string $idempotencyKey = null): array
     {
         $enc = $this->encryptId((string) $customerId);
         $response = $this->makeRequest('POST', "/customers/transactions/{$enc}", [
             'payment_type' => $type,
-        ]);
+        ], idempotencyKey: $idempotencyKey);
 
         $typeMap = [
             'App\\Models\\Deposit' => 'deposit',
@@ -601,11 +611,11 @@ class GameApiService
      *
      * @param  string|array<int, string>  $codes
      */
-    public function getCustomersByReferral(string|array $codes): array
+    public function getCustomersByReferral(string|array $codes, ?string $idempotencyKey = null): array
     {
         $referralCode = is_array($codes) ? implode(',', $codes) : $codes;
 
-        return $this->makeRequest('POST', '/customers/referrals', ['referral_code' => $referralCode]);
+        return $this->makeRequest('POST', '/customers/referrals', ['referral_code' => $referralCode], idempotencyKey: $idempotencyKey);
     }
 
     /**
@@ -614,11 +624,11 @@ class GameApiService
      *
      * @param  string|array<int, string>  $codes
      */
-    public function getPurchasesByReferral(string|array $codes): array
+    public function getPurchasesByReferral(string|array $codes, ?string $idempotencyKey = null): array
     {
         $referralCode = is_array($codes) ? implode(',', $codes) : $codes;
 
-        return $this->makeRequest('POST', '/purchases/referrals', ['referral_code' => $referralCode]);
+        return $this->makeRequest('POST', '/purchases/referrals', ['referral_code' => $referralCode], idempotencyKey: $idempotencyKey);
     }
 
     /**
@@ -628,13 +638,13 @@ class GameApiService
      * BUG B2: The API accepts start_date/end_date but ignores them — always returns today's counts.
      * This is a known API bug; track ticket for the API team to fix.
      */
-    public function getPlayerGameStats(int $customerId, string $startDate, string $endDate): array
+    public function getPlayerGameStats(int $customerId, string $startDate, string $endDate, ?string $idempotencyKey = null): array
     {
         return $this->makeRequest('POST', '/stats/customers/played', [
             'customer_id' => $customerId,
             'start_date' => $startDate,
             'end_date' => $endDate,
-        ])['data'] ?? [];
+        ], idempotencyKey: $idempotencyKey)['data'] ?? [];
     }
 
     /**
@@ -644,20 +654,20 @@ class GameApiService
      * BUG B4: SMS sending is stubbed on the API side ($smsSent = true).
      * No real SMS is ever delivered. Track ticket for real SMS provider integration.
      */
-    public function sendOtpCode(string $phoneNo): array
+    public function sendOtpCode(string $phoneNo, ?string $idempotencyKey = null): array
     {
-        return $this->makeRequest('POST', '/customer/send-code', ['phone_no' => $phoneNo]);
+        return $this->makeRequest('POST', '/customer/send-code', ['phone_no' => $phoneNo], idempotencyKey: $idempotencyKey);
     }
 
     /**
      * TASK-029: Verify a customer's phone using the 6-digit OTP.
      * Endpoint: PATCH /api/v1/customers/{enc}/verify-phone
      */
-    public function verifyPhone(int $customerId, string $code): array
+    public function verifyPhone(int $customerId, string $code, ?string $idempotencyKey = null): array
     {
         $enc = $this->encryptId((string) $customerId);
 
-        return $this->makeRequest('PATCH', "/customers/{$enc}/verify-phone", ['code' => $code]);
+        return $this->makeRequest('PATCH', "/customers/{$enc}/verify-phone", ['code' => $code], idempotencyKey: $idempotencyKey);
     }
 
     // -------------------------------------------------------------------------
@@ -723,12 +733,12 @@ class GameApiService
      * TASK-032: Get single-game income analytics grouped by number of players.
      * Endpoint: POST /api/v1/game/income
      */
-    public function getGameIncomeBreakdown(string $startDate, string $endDate): array
+    public function getGameIncomeBreakdown(string $startDate, string $endDate, ?string $idempotencyKey = null): array
     {
         return $this->makeRequest('POST', '/game/income', [
             'start_date' => $startDate,
             'end_date' => $endDate,
-        ], [], 60, 10)['data'] ?? [];
+        ], [], 60, 10, $idempotencyKey)['data'] ?? [];
     }
 
     /**
@@ -737,14 +747,14 @@ class GameApiService
      *
      * @param  int  $gameType  1 = Tournament, 2 = Jackpot
      */
-    public function getCompetitionIncomeBreakdown(int $gameType, string $startDate, string $endDate): array
+    public function getCompetitionIncomeBreakdown(int $gameType, string $startDate, string $endDate, ?string $idempotencyKey = null): array
     {
         $enc = $this->encryptId((string) $gameType);
 
         return $this->makeRequest('POST', "/competition/income/{$enc}", [
             'start_date' => $startDate,
             'end_date' => $endDate,
-        ], [], 60, 10)['data'] ?? [];
+        ], [], 60, 10, $idempotencyKey)['data'] ?? [];
     }
 
     /**
@@ -762,14 +772,14 @@ class GameApiService
      *
      * @param  int  $toWalletId  Defaults to 1 (house wallet).
      */
-    public function transferWallet(int $fromWalletId, float $amount, int $toWalletId = 1): array
+    public function transferWallet(int $fromWalletId, float $amount, int $toWalletId = 1, ?string $idempotencyKey = null): array
     {
         $enc = $this->encryptId((string) $fromWalletId);
 
         return $this->makeRequest('POST', "/wallets/transfer/{$enc}", [
             'amount' => $amount,
             'wallet_id' => $toWalletId,
-        ]);
+        ], idempotencyKey: $idempotencyKey);
     }
 
     /**
@@ -811,22 +821,22 @@ class GameApiService
      * Update a customer's wallet by directly setting an amount (adds to balance).
      * Endpoint: PUT /api/v1/customers/{enc}/wallet
      */
-    public function updateCustomerWallet(int $customerId, float $amount): array
+    public function updateCustomerWallet(int $customerId, float $amount, ?string $idempotencyKey = null): array
     {
         $enc = $this->encryptId((string) $customerId);
 
-        return $this->makeRequest('PUT', "/customers/{$enc}/wallet", ['amount' => $amount]);
+        return $this->makeRequest('PUT', "/customers/{$enc}/wallet", ['amount' => $amount], idempotencyKey: $idempotencyKey);
     }
 
     /**
      * Update a customer's fields.
      * Endpoint: PUT /api/v1/customers/{enc}
      */
-    public function updateCustomer(int $customerId, array $data): array
+    public function updateCustomer(int $customerId, array $data, ?string $idempotencyKey = null): array
     {
         $enc = $this->encryptId((string) $customerId);
 
-        return $this->makeRequest('PUT', "/customers/{$enc}", $data);
+        return $this->makeRequest('PUT', "/customers/{$enc}", $data, idempotencyKey: $idempotencyKey);
     }
 
     /**
@@ -844,11 +854,11 @@ class GameApiService
      * Update a game wallet (e.g. status change).
      * Endpoint: PUT /api/v1/game/wallets/{enc}
      */
-    public function updateGameWallet(int $gameWalletId, array $data): array
+    public function updateGameWallet(int $gameWalletId, array $data, ?string $idempotencyKey = null): array
     {
         $enc = $this->encryptId((string) $gameWalletId);
 
-        return $this->makeRequest('PUT', "/game/wallets/{$enc}", $data);
+        return $this->makeRequest('PUT', "/game/wallets/{$enc}", $data, idempotencyKey: $idempotencyKey);
     }
 
     /**

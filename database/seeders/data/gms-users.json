@@ -6,7 +6,7 @@
         "phone": "0712345678",
         "id_no": null,
         "share": 0.40,
-        "role": "director",
+        "role": "admin",
         "password": "Kizuka@123456"
     },
     {
@@ -36,7 +36,7 @@
         "phone": "0723456789",
         "id_no": null,
         "share": 0.06,
-        "role": "agent",
+        "role": "admin",
         "password": "Mitko@123456"
     },
     {
