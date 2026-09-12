@@ -1,11 +1,10 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers;
 
 use App\Enums\CompanyWithdrawStatus;
 use App\Enums\PayoutStatus;
 use App\Enums\WithdrawStatus;
-use App\Http\Controllers\Controller;
 use App\Models\CompanyWithdraw;
 use App\Models\Payout;
 use App\Models\Withdraw;
