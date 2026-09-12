@@ -10,14 +10,13 @@ use App\Models\User;
 use Illuminate\Support\Facades\Route;
 
 
-Route::middleware(SafaricomIpWhitelist::class)->group(function () {
-    Route::post('/b2c/result', [MpesaB2CResultController::class, 'handle']);
-    Route::post('/b2c/timeout', [MpesaB2CResultController::class, 'handle']);
-    Route::post('/b2c/balance/result', B2CBalanceResultController::class);
-    Route::post('/b2c/balance/timeout', B2CBalanceTimeoutController::class);
-    Route::post('/c2b/balance/result', C2BBalanceResultController::class);
-    Route::post('/c2b/balance/timeout', C2BBalanceTimeoutController::class);
-});
+// Route::middleware(SafaricomIpWhitelist::class)->group(function () {});
+Route::post('/b2c/result', [MpesaB2CResultController::class, 'handle']);
+Route::post('/b2c/timeout', [MpesaB2CResultController::class, 'handle']);
+Route::post('/b2c/balance/result', B2CBalanceResultController::class);
+Route::post('/b2c/balance/timeout', B2CBalanceTimeoutController::class);
+Route::post('/c2b/balance/result', C2BBalanceResultController::class);
+Route::post('/c2b/balance/timeout', C2BBalanceTimeoutController::class);
 
 Route::get('/email/preview/{type}', function (string $type) {
     $user = auth()->user() ?? User::first();
