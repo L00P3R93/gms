@@ -15,6 +15,15 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->preventRequestForgery(except: [
+            '/b2c/result',
+            '/b2c/timeout',
+            '/b2c/balance/result',
+            '/b2c/balance/timeout',
+            '/c2b/balance/result',
+            '/c2b/balance/timeout',
+        ]);
+
         $middleware->alias([
             'role' => RoleMiddleware::class,
             'permission' => PermissionMiddleware::class,
