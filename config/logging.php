@@ -127,6 +127,12 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
+        'mpesa' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/mpesa.log'),
+            'level' => 'info',
+        ],
+
     ],
 
 ];
