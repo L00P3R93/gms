@@ -48,9 +48,11 @@ class ProcessPayoutsJob implements ShouldQueue
             $userParams = [
                 'Amount' => (int) $payout->amount,
                 'PartyB' => $payee->phone,
-                'Remarks' => 'Payout: '.$payout->reason,
+                'Remarks' => 'Company Payout',
                 'Occasion' => '',
             ];
+            Log::info('MPesa User Params: ', $userParams);
+
             $response = $mpesa->b2c($userParams);
 
             $conversationId = $response['ConversationID'] ?? null;
