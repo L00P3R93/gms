@@ -3,8 +3,10 @@
 namespace App\Filament\Resources\Payouts\Widgets;
 
 use App\Enums\PayoutStatus;
+use App\Models\MpesaAccountBalance;
 use App\Models\Payout;
 use App\Services\MpesaService;
+use Carbon\CarbonInterface;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use Illuminate\Support\Facades\Cache;
@@ -25,6 +27,11 @@ class PayoutStatsWidget extends BaseWidget
             ->sum('amount');
 
         $failedCount = Payout::where('status', PayoutStatus::Failed)->count();
+
+        $b2c = MpesaAccountBalance::latestOfType('b2c')->first();
+        $stale = now()->subHours(2);
+
+
 
         $b2cBalance = Cache::remember('mpesa_b2c_balance', 300, function () {
             try {
@@ -51,10 +58,28 @@ class PayoutStatsWidget extends BaseWidget
                 ->description('Requires attention')
                 ->descriptionIcon('heroicon-m-exclamation-circle')
                 ->color('danger'),
-            Stat::make('M-Pesa B2C Balance', 'KES '.number_format($b2cBalance, 2))
-                ->description('Available for payouts')
+            Stat::make('B2C Utility Account', 'KES '.number_format($b2c?->utility_account_balance ?? 0, 2))
+                ->description($this->formatLastUpdated($b2c?->fetched_at))
                 ->descriptionIcon('heroicon-m-banknotes')
-                ->color('primary'),
+                ->color($this->getBalanceColor($b2c, $stale)),
         ];
+    }
+
+    private function formatLastUpdated(?CarbonInterface $date): string
+    {
+        if (! $date) {
+            return 'No data yet';
+        }
+
+        return 'Updated '.$date->diffForHumans();
+    }
+
+    private function getBalanceColor(?MpesaAccountBalance $balance, CarbonInterface $stale): string
+    {
+        if (! $balance || $balance->fetched_at->isBefore($stale)) {
+            return 'warning';
+        }
+
+        return 'success';
     }
 }
