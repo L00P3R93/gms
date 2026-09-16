@@ -22,9 +22,7 @@ class ProcessPayoutsJob implements ShouldQueue
     public function handle(MpesaService $mpesa): void
     {
         $payouts = DB::transaction(function () {
-            return Payout::where('status', PayoutStatus::Approved)
-                ->lockForUpdate()
-                ->get();
+            return Payout::where('status', PayoutStatus::Approved)->get();
         });
 
         foreach ($payouts as $payout) {
