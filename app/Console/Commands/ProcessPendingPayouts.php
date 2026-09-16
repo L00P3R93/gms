@@ -12,7 +12,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-#[Signature('app:process-pending-payouts')]
+#[Signature('payouts:process-pending')]
 #[Description('Process Pending Payouts per minute via M-Pesa B2C')]
 class ProcessPendingPayouts extends Command
 {
@@ -37,6 +37,10 @@ class ProcessPendingPayouts extends Command
 
                 return;
             }
+
+            $payout->updateQuietly([
+                'status' => PayoutStatus::Processing,
+            ]);
 
             $payee = $payout->payee;
             $this->info("Processing payout ID {$payout->id} — KES {$payout->amount} to {$payee->phone}.");
@@ -71,6 +75,7 @@ class ProcessPendingPayouts extends Command
                     'conversation_id' => $ConversationID,
                     'receipt' => $ConversationID,
                     'response' => $ResponseDescription,
+                    'status' => PayoutStatus::Completed,
                     'processed_at' => now(),
                 ]);
             } else {
