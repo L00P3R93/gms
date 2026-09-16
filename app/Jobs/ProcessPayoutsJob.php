@@ -45,12 +45,14 @@ class ProcessPayoutsJob implements ShouldQueue
         });
 
         try {
-            $response = $mpesa->b2c(
-                $payout->payee->phone,
-                $payout->amount,
-                'Payout: '.$payout->reason,
-                $payout->idempotency_key,
-            );
+            $payee = $payout->payee;
+            $userParams = [
+                'Amount' => (int) $payout->amount,
+                'PartyB' => $payee->phone,
+                'Remarks' => 'Payout: '.$payout->reason,
+                'Occasion' => '',
+            ];
+            $response = $mpesa->b2c($userParams);
 
             $conversationId = $response['ConversationID'] ?? null;
 
