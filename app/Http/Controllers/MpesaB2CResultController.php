@@ -61,7 +61,11 @@ class MpesaB2CResultController extends Controller
             ->first();
 
         if ($payout) {
-            $payout->update(['status' => $payoutStatus, 'response' => $resultDesc]);
+            $payout->update([
+                'status' => $payoutStatus,
+                'response' => $resultDesc,
+                ...($resultCode == 0 ? ['processed_at' => now()] : []),
+            ]);
         }
 
         return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Accepted']);
