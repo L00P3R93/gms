@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Log;
 
 class MpesaB2CResultController extends Controller
 {
-    public function handle(Request $request): JsonResponse
+    public function __invoke(Request $request): JsonResponse
     {
         $payload = $request->all();
         Log::info('M-Pesa B2C Result received', $payload);
