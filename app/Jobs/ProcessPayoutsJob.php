@@ -38,6 +38,7 @@ class ProcessPayoutsJob implements ShouldQueue
             $fresh = Payout::lockForUpdate()->find($payout->id);
 
             if ($fresh->status !== PayoutStatus::Approved) {
+                Log::error('Payout not approved');
                 return;
             }
 
