@@ -45,6 +45,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configurePolicies();
+        $this->configureGates();
         $this->configureDefaults();
     }
 
@@ -59,6 +60,11 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Payee::class, PayeePolicy::class);
         Gate::policy(Payout::class, PayoutPolicy::class);
         Gate::policy(AuditLog::class, AuditLogPolicy::class);
+    }
+
+    protected function configureGates(): void
+    {
+        Gate::define('viewLogViewer', fn (?User $user): bool => $user?->isAdmin() ?? false);
     }
 
     protected function configureDefaults(): void

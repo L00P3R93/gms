@@ -21,6 +21,7 @@
         "laravel/tinker": "^3.0",
         "livewire/flux": "^2.13.1",
         "livewire/livewire": "^4.1",
+        "opcodesio/log-viewer": "^3.24",
         "spatie/laravel-medialibrary": "~11.0",
         "spatie/laravel-permission": "^7.4",
         "stechstudio/filament-impersonate": "^5.6",
