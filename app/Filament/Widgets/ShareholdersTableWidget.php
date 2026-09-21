@@ -9,9 +9,9 @@ use Filament\Widgets\TableWidget as BaseWidget;
 
 class ShareholdersTableWidget extends BaseWidget
 {
-    protected static ?int $sort = 6;
+    protected static ?int $sort = 31;
 
-    protected int|string|array $columnSpan = 'full';
+    protected int|string|array $columnSpan = 1;
 
     protected ?string $pollingInterval = '60s';
 
@@ -19,7 +19,7 @@ class ShareholdersTableWidget extends BaseWidget
 
     public static function canView(): bool
     {
-        return true;
+        return auth()->user()?->isAdmin() ?? false;
     }
 
     public function table(Table $table): Table

@@ -9,13 +9,13 @@ class ShareDistributionChartWidget extends ChartWidget
 {
     protected ?string $heading = 'Share Ownership Distribution';
 
-    protected static ?int $sort = 7;
+    protected static ?int $sort = 32;
 
     protected ?string $pollingInterval = '300s';
 
     public static function canView(): bool
     {
-        return true;
+        return auth()->user()?->isAdmin() ?? false;
     }
 
     protected function getData(): array

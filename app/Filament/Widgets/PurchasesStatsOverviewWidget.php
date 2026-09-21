@@ -13,11 +13,11 @@ class PurchasesStatsOverviewWidget extends StatsOverviewWidget
 {
     protected ?string $pollingInterval = '60s';
 
-    protected static ?int $sort = 2;
+    protected static ?int $sort = 14;
 
     protected ?string $heading = 'Customer Purchase Summary';
 
-    protected int|string|array $columnSpan = 4;
+    protected int|string|array $columnSpan = 'full';
 
     public static function canView(): bool
     {

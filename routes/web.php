@@ -4,9 +4,10 @@ use App\Http\Controllers\B2CBalanceResultController;
 use App\Http\Controllers\B2CBalanceTimeoutController;
 use App\Http\Controllers\C2BBalanceResultController;
 use App\Http\Controllers\C2BBalanceTimeoutController;
+use App\Http\Controllers\FinanceExportController;
 use App\Http\Controllers\MpesaB2CResultController;
-use App\Http\Middleware\SafaricomIpWhitelist;
 use App\Models\User;
+use Filament\Http\Middleware\Authenticate;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/b2c/result', MpesaB2CResultController::class);
@@ -16,6 +17,9 @@ Route::post('/b2c/balance/timeout', B2CBalanceTimeoutController::class);
 Route::post('/c2b/balance/result', C2BBalanceResultController::class);
 Route::post('/c2b/balance/timeout', C2BBalanceTimeoutController::class);
 
+Route::get('/finance/export/{report}', FinanceExportController::class)
+    ->middleware(Authenticate::class)
+    ->name('finance.export');
 
 Route::get('/email/preview/{type}', function (string $type) {
     $user = auth()->user() ?? User::first();

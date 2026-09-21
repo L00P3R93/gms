@@ -12,13 +12,13 @@ use Illuminate\Support\Facades\Cache;
 
 class GameStatsWidget extends BaseWidget
 {
-    protected static ?int $sort = 3;
+    protected static ?int $sort = 2;
 
     protected ?string $pollingInterval = '300s';
 
     protected ?string $heading = 'Games Played Today Summary';
 
-    protected int | string | array $columnSpan = 3;
+    protected int|string|array $columnSpan = 'full';
 
     public static function canView(): bool
     {
@@ -48,41 +48,41 @@ class GameStatsWidget extends BaseWidget
 
         $played = $stats['played'] ?? [];
 
-        $singleGamesPlayed = $played['games'];
-        $_2PlayerSingleGamesPlayed = $singleGamesPlayed['2_players'];
-        $_3PlayerSingleGamesPlayed = $singleGamesPlayed['3_players'];
-        $_4PlayerSingleGamesPlayed = $singleGamesPlayed['4_players'];
-        $totalSingleGamesPlayed = $singleGamesPlayed['total'];
+        $singleGamesPlayed = $played['games'] ?? [];
+        $_2PlayerSingleGamesPlayed = $singleGamesPlayed['2_players'] ?? null;
+        $_3PlayerSingleGamesPlayed = $singleGamesPlayed['3_players'] ?? null;
+        $_4PlayerSingleGamesPlayed = $singleGamesPlayed['4_players'] ?? null;
+        $totalSingleGamesPlayed = $singleGamesPlayed['total'] ?? 0;
 
-        $tournamentsPlayed = $played['tournament'];
-        $_3RoundsTournamentsPlayed = $tournamentsPlayed['3_rounds'];
-        $_4RoundsTournamentsPlayed = $tournamentsPlayed['4_rounds'];
-        $_5RoundsTournamentsPlayed = $tournamentsPlayed['5_rounds'];
-        $totalTournamentsPlayed = $tournamentsPlayed['total'];
+        $tournamentsPlayed = $played['tournament'] ?? [];
+        $_3RoundsTournamentsPlayed = $tournamentsPlayed['3_rounds'] ?? null;
+        $_4RoundsTournamentsPlayed = $tournamentsPlayed['4_rounds'] ?? null;
+        $_5RoundsTournamentsPlayed = $tournamentsPlayed['5_rounds'] ?? null;
+        $totalTournamentsPlayed = $tournamentsPlayed['total'] ?? 0;
 
-        $jackpotsPlayed = $played['jackpots'];
-        $_13RoundsJackpotsPlayed = $jackpotsPlayed['13_rounds'];
-        $_17RoundsJackpotsPlayed = $jackpotsPlayed['17_rounds'];
-        $_21RoundsJackpotsPlayed = $jackpotsPlayed['21_rounds'];
-        $totalJackpotsPlayed = $jackpotsPlayed['total'];
+        $jackpotsPlayed = $played['jackpots'] ?? [];
+        $_13RoundsJackpotsPlayed = $jackpotsPlayed['13_rounds'] ?? null;
+        $_17RoundsJackpotsPlayed = $jackpotsPlayed['17_rounds'] ?? null;
+        $_21RoundsJackpotsPlayed = $jackpotsPlayed['21_rounds'] ?? null;
+        $totalJackpotsPlayed = $jackpotsPlayed['total'] ?? 0;
 
         $fmtInt = fn ($v) => $v !== null && $v !== '' && $v !== 0 ? Format::formatNumber((int) $v) : '—';
 
         return [
             Stat::make('Single Games Played', $fmtInt($totalSingleGamesPlayed.' Games' ?? null))
-                ->description("2P: {$fmtInt($_2PlayerSingleGamesPlayed ?? null)} · 3P: {$fmtInt( $_3PlayerSingleGamesPlayed ?? null)} · 4P: {$fmtInt( $_4PlayerSingleGamesPlayed ?? null)}")
+                ->description("2P: {$fmtInt($_2PlayerSingleGamesPlayed ?? null)} · 3P: {$fmtInt($_3PlayerSingleGamesPlayed ?? null)} · 4P: {$fmtInt($_4PlayerSingleGamesPlayed ?? null)}")
                 ->descriptionColor('primary')
                 ->descriptionIcon(Heroicon::OutlinedPlayCircle)
                 ->color($apiError ? 'gray' : 'primary'),
 
             Stat::make('Tournaments Played', $fmtInt($totalTournamentsPlayed.' Games' ?? null))
-                ->description("3R: {$fmtInt($_3RoundsTournamentsPlayed ?? null)} · 4R: {$fmtInt( $_4RoundsTournamentsPlayed ?? null)} · 5R: {$fmtInt( $_5RoundsTournamentsPlayed ?? null)}")
+                ->description("3R: {$fmtInt($_3RoundsTournamentsPlayed ?? null)} · 4R: {$fmtInt($_4RoundsTournamentsPlayed ?? null)} · 5R: {$fmtInt($_5RoundsTournamentsPlayed ?? null)}")
                 ->descriptionColor('success')
                 ->descriptionIcon(Heroicon::OutlinedPlay)
                 ->color($apiError ? 'gray' : 'success'),
 
             Stat::make('Jackpots Played', $fmtInt($totalJackpotsPlayed.' Games' ?? null))
-                ->description("13R: {$fmtInt($_13RoundsJackpotsPlayed ?? null)} · 17R: {$fmtInt( $_17RoundsJackpotsPlayed ?? null)} · 21R: {$fmtInt( $_21RoundsJackpotsPlayed ?? null)}")
+                ->description("13R: {$fmtInt($_13RoundsJackpotsPlayed ?? null)} · 17R: {$fmtInt($_17RoundsJackpotsPlayed ?? null)} · 21R: {$fmtInt($_21RoundsJackpotsPlayed ?? null)}")
                 ->descriptionColor('info')
                 ->descriptionIcon(Heroicon::OutlinedPlayCircle)
                 ->color($apiError ? 'gray' : 'info'),

@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Cache;
 
 class AgentStatsWidget extends BaseWidget
 {
-    protected static ?int $sort = 1;
+    protected static ?int $sort = 5;
 
     public static function canView(): bool
     {

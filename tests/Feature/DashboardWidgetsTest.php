@@ -42,9 +42,9 @@ it('sums completed company and shareholder withdrawals for the current month', f
     $this->actingAs($this->admin);
 
     Livewire::test(WithdrawalsThisMonthWidget::class)
-        ->assertSee('KES 5,000.00')
-        ->assertSee('KES 2,000.00')
-        ->assertSee('KES 7,000.00')
+        ->assertSee('KES 5.00k')
+        ->assertSee('KES 2.00k')
+        ->assertSee('KES 7.00k')
         ->assertSee('1 pending approval');
 });
 
@@ -58,8 +58,8 @@ it('excludes withdrawals from previous months', function (): void {
     $this->actingAs($this->admin);
 
     Livewire::test(WithdrawalsThisMonthWidget::class)
-        ->assertSee('KES 0.00')
-        ->assertDontSee('KES 9,999.00');
+        ->assertSee('KES —')
+        ->assertDontSee('KES 9.99k');
 });
 
 it('lists shareholders in the dashboard table widget', function (): void {
@@ -86,13 +86,57 @@ it('renders the share ownership distribution chart', function (): void {
     Livewire::test(ShareDistributionChartWidget::class)->assertOk();
 });
 
-it('hides dashboard widgets from non super-admin users', function (): void {
+it('restricts the shareholder widgets to admins while withdrawals stay visible to all', function (): void {
     $agent = User::factory()->create(['status' => UserStatus::Active->value]);
     $agent->assignRole('agent');
 
     $this->actingAs($agent);
 
-    expect(WithdrawalsThisMonthWidget::canView())->toBeFalse()
+    expect(WithdrawalsThisMonthWidget::canView())->toBeTrue()
         ->and(ShareholdersTableWidget::canView())->toBeFalse()
         ->and(ShareDistributionChartWidget::canView())->toBeFalse();
+});
+
+it('orders dashboard widgets in contiguous groups of related widgets', function (): void {
+    $sorts = collect(glob(app_path('Filament/Widgets/*.php')))
+        ->map(fn (string $file): string => 'App\\Filament\\Widgets\\'.basename($file, '.php'))
+        ->mapWithKeys(fn (string $class): array => [
+            class_basename($class) => (new ReflectionClass($class))->getProperty('sort')->getValue(),
+        ])
+        ->sort();
+
+    expect($sorts->values()->duplicates())->toBeEmpty();
+
+    $groups = [
+        'activity' => ['StatsOverview', 'GameStatsWidget', 'PlayerEngagementWidget', 'PlayerRegistrationTrendWidget', 'AgentStatsWidget'],
+        'income' => ['IncomeStatsOverviewWidget', 'FinanceOverviewWidget', 'RevenueChartWidget', 'StakesVersusPayoutsChartWidget', 'PurchasesStatsOverviewWidget'],
+        'cash' => ['MpesaBalanceStatsWidget', 'PlatformPositionWidget'],
+        'payouts' => ['WithdrawalsThisMonthWidget', 'ShareholdersTableWidget', 'ShareDistributionChartWidget'],
+        'players' => ['TopCustomersWidget'],
+    ];
+
+    $order = $sorts->keys()->values();
+    $lastIndexOfPreviousGroup = -1;
+
+    foreach ($groups as $members) {
+        $indexes = collect($members)->map(fn (string $widget): int => $order->search($widget))->sort()->values();
+
+        expect($indexes->first())->toBeGreaterThan($lastIndexOfPreviousGroup)
+            ->and($indexes->last() - $indexes->first())->toBe(count($members) - 1);
+
+        $lastIndexOfPreviousGroup = $indexes->last();
+    }
+
+    expect($order)->toHaveCount(collect($groups)->flatten()->count());
+});
+
+it('keeps every dashboard widget within the two column grid', function (): void {
+    $spans = collect(glob(app_path('Filament/Widgets/*.php')))
+        ->map(fn (string $file): string => 'App\\Filament\\Widgets\\'.basename($file, '.php'))
+        ->mapWithKeys(fn (string $class): array => [
+            class_basename($class) => (new ReflectionClass($class))->getDefaultProperties()['columnSpan'] ?? 1,
+        ]);
+
+    // A span above 2 creates implicit grid columns and shrinks every 'full' widget to half width.
+    expect($spans->reject(fn ($span): bool => $span === 'full' || $span === 1)->all())->toBe([]);
 });

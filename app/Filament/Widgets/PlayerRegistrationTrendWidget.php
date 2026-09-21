@@ -8,9 +8,9 @@ class PlayerRegistrationTrendWidget extends ChartWidget
 {
     protected ?string $heading = 'Daily Active Players (Last 30 Days)';
 
-    protected static ?int $sort = 5;
+    protected static ?int $sort = 4;
 
-    protected int | string | array $columnSpan = 'full';
+    protected int|string|array $columnSpan = 'full';
 
     protected ?string $pollingInterval = '300s';
 

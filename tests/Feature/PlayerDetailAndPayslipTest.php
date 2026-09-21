@@ -3,6 +3,7 @@
 use App\Enums\UserStatus;
 use App\Filament\Pages\PayslipPage;
 use App\Filament\Resources\Accounts\Pages\ViewAccount;
+use App\Livewire\SingleGamesTable;
 use App\Models\User;
 use App\Services\GameApiService;
 use Livewire\Livewire;
@@ -32,27 +33,28 @@ it('loads the ViewAccount page for a valid account ID', function (): void {
 
     Livewire::test(ViewAccount::class, ['record' => 1])
         ->assertOk()
-        ->assertCount('singleGames', 0);
+        ->assertSet('apiUnavailable', false);
 });
 
-it('single games tab shows data from API response', function (): void {
+it('single games table shows data from API response', function (): void {
     $this->mock(GameApiService::class)
-        ->shouldReceive('getCustomer')->andReturn(['id' => 1, 'name' => 'Test', 'status' => 1])
         ->shouldReceive('getCustomerGamesPlayed')->andReturn([
             'single_games' => [
-                ['game_id' => 'G1', 'game_type' => 2, 'amount' => 100, 'payment_type' => 'win', 'created_at' => now()->toDateTimeString()],
-                ['game_id' => 'G2', 'game_type' => 2, 'amount' => 50, 'payment_type' => 'deposit', 'created_at' => now()->toDateTimeString()],
+                'current_page' => 1,
+                'per_page' => 10,
+                'total' => 2,
+                'data' => [
+                    ['game_id' => 'G1', 'game_type' => 'Single Game', 'players' => 2, 'amount' => 100, 'payment_type' => 'deposit', 'state' => 'win', 'created_at' => now()->toDateTimeString()],
+                    ['game_id' => 'G2', 'game_type' => 'Single Game', 'players' => 3, 'amount' => 50, 'payment_type' => 'deposit', 'state' => 'loss', 'created_at' => now()->toDateTimeString()],
+                ],
             ],
-            'tournament_games' => [],
-            'jackpot_games' => [],
-        ])
-        ->shouldReceive('getCustomerTransactions')->andReturn(['transactions' => []])
-        ->shouldReceive('getCustomerPurchases')->andReturn([]);
+        ]);
 
     $this->actingAs($this->admin);
 
-    Livewire::test(ViewAccount::class, ['record' => 1])
-        ->assertCount('singleGames', 2);
+    Livewire::test(SingleGamesTable::class, ['customerId' => 1])
+        ->assertSee('G1')
+        ->assertSee('G2');
 });
 
 it('ViewAccount sets apiUnavailable when API throws', function (): void {

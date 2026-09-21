@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Exceptions\GameApiException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Pool;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -57,7 +59,8 @@ class GameApiService
         array $query = [],
         int $timeout = 8,
         int $connectTimeout = 5,
-        ?string $idempotencyKey = null
+        ?string $idempotencyKey = null,
+        bool $readOnly = false
     ): array {
         $url = $this->baseUrl.$path;
 
@@ -66,11 +69,21 @@ class GameApiService
             'Accept' => 'application/json',
         ];
 
-        if (strtoupper($method) !== 'GET') {
+        // Read-only POSTs (leaderboards, stats, lookups) are not mutations, so they only
+        // carry an Idempotency-Key when the caller explicitly supplies one.
+        $isMutation = strtoupper($method) !== 'GET' && ! $readOnly;
+
+        if ($isMutation || $idempotencyKey !== null) {
             $headers['Idempotency-Key'] = $idempotencyKey ?? Str::uuid()->toString();
         }
 
         $pending = Http::withHeaders($headers)->timeout($timeout)->connectTimeout($connectTimeout);
+
+        // Reads are safe to retry once on a transient failure; mutations never are.
+        if (strtoupper($method) === 'GET') {
+            $pending = $pending->retry(2, 300, fn ($exception): bool => $exception instanceof ConnectionException
+                || ($exception instanceof RequestException && $exception->response->serverError()), throw: false);
+        }
 
         try {
             $response = match (strtoupper($method)) {
@@ -92,6 +105,11 @@ class GameApiService
         if ($response->failed()) {
             $apiMessage = $decoded['message'] ?? $decoded['error'] ?? $decoded['status'] ?? '';
             $statusCode = $response->status();
+
+            if ($statusCode === 429) {
+                $retryAfter = $response->header('Retry-After');
+                $apiMessage = 'Rate limit reached. Please retry shortly'.($retryAfter !== '' ? " (in {$retryAfter}s)." : '.');
+            }
 
             Log::error('GameAPI request failed', [
                 'method' => $method,
@@ -122,7 +140,7 @@ class GameApiService
      */
     public function encryptIdViaApi(string $plainId, ?string $idempotencyKey = null): string
     {
-        return $this->makeRequest('POST', '/encrypt', ['identifier' => $plainId], idempotencyKey: $idempotencyKey)['encrypted_id'] ?? '';
+        return $this->makeRequest('POST', '/encrypt', ['identifier' => $plainId], idempotencyKey: $idempotencyKey, readOnly: true)['encrypted_id'] ?? '';
     }
 
     /**
@@ -418,6 +436,8 @@ class GameApiService
      * Fetch daily income stats for the last 30 days.
      * Endpoint: GET /api/v1/stats/income/daily-30-days
      * Returns: { start_date, end_date, daily_stats: { "YYYY-MM-DD": { single_games, tournaments, jackpots, total } } }
+     *
+     * Subject to the `stats` limiter (20/min), so callers should cache.
      */
     public function getDailyIncome(): array
     {
@@ -427,7 +447,8 @@ class GameApiService
     /**
      * Fetch current business day's cumulative income.
      * Endpoint: GET /api/v1/stats/income
-     * Returns: { success: true, data: { total_income, games, tournaments, jackpots } }
+     * Returns: { success: true, data: { total_income, games: {total, 2_players, …},
+     *            tournaments: {total, 3_rounds, …}, jackpots: {total, 13_rounds, …} } }
      */
     public function getCurrentDayIncome(): array
     {
@@ -444,25 +465,30 @@ class GameApiService
         return $this->makeRequest('POST', '/customers/leaderboard', [
             'start_date' => $startDate,
             'end_date' => $endDate,
-        ], idempotencyKey: $idempotencyKey);
+        ], idempotencyKey: $idempotencyKey, readOnly: true);
     }
 
     /**
-     * TASK-019: Fetch the combined weekly leaderboard (single + competition winnings).
-     * Endpoint: GET /api/v1/customers/combined-leaderboard
+     * TASK-019: Fetch the combined leaderboard (single + competition winnings).
+     * Endpoint: POST /api/v1/customers/combined-leaderboard
      *
-     * BUG B3: This endpoint always uses the current week regardless of any date params passed.
-     * Date filtering is not supported here — use getLeaderboard() for date-ranged results.
+     * The API documents this as a POST (a GET returns 400 "Invalid identifier").
+     * Dates are optional. Verified live: the API currently returns the current week's
+     * leaderboard whether or not dates are sent.
+     * Returns: { leaderboard: [ { id, name, single_game_wins, competition_wins, total_wins } ] }
      */
-    public function getCombinedLeaderboard(): array
+    public function getCombinedLeaderboard(?string $startDate = null, ?string $endDate = null): array
     {
-        return $this->makeRequest('GET', '/customers/combined-leaderboard');
+        return $this->makeRequest('POST', '/customers/combined-leaderboard', array_filter([
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+        ]), readOnly: true);
     }
 
     /**
      * TASK-020: Fetch all completed game results.
      * Endpoint: GET /api/v1/game/results
-     * Returns: { status: "Success", data: { "5": { id, game_id, players, total_bet, ... } } }
+     * Returns: { status: "Success", data: [ { id, game_id, players, total_bet, customer_id, name, amount, income, created_at } ] }
      */
     public function getGameResults(): array
     {
@@ -535,7 +561,7 @@ class GameApiService
         $enc = $this->encryptId((string) $customerId);
         $response = $this->makeRequest('POST', "/customers/transactions/{$enc}", [
             'payment_type' => $type,
-        ], idempotencyKey: $idempotencyKey);
+        ], idempotencyKey: $idempotencyKey, readOnly: true);
 
         $typeMap = [
             'App\\Models\\Deposit' => 'deposit',
@@ -598,10 +624,10 @@ class GameApiService
         $codes = is_array($referralCode) ? implode(',', $referralCode) : $referralCode;
 
         return [
-            'customers' => $this->makeRequest('POST', '/stats/customers/referrals', ['referral_code' => $codes]),
-            'purchases' => $this->makeRequest('POST', '/stats/purchases/referrals', ['referral_code' => $codes]),
-            'customer_list' => $this->makeRequest('POST', '/customers/referrals', ['referral_code' => $codes]),
-            'purchase_list' => $this->makeRequest('POST', '/purchases/referrals', ['referral_code' => $codes]),
+            'customers' => $this->makeRequest('POST', '/stats/customers/referrals', ['referral_code' => $codes], readOnly: true),
+            'purchases' => $this->makeRequest('POST', '/stats/purchases/referrals', ['referral_code' => $codes], readOnly: true),
+            'customer_list' => $this->makeRequest('POST', '/customers/referrals', ['referral_code' => $codes], readOnly: true),
+            'purchase_list' => $this->makeRequest('POST', '/purchases/referrals', ['referral_code' => $codes], readOnly: true),
         ];
     }
 
@@ -615,7 +641,7 @@ class GameApiService
     {
         $referralCode = is_array($codes) ? implode(',', $codes) : $codes;
 
-        return $this->makeRequest('POST', '/customers/referrals', ['referral_code' => $referralCode], idempotencyKey: $idempotencyKey);
+        return $this->makeRequest('POST', '/customers/referrals', ['referral_code' => $referralCode], idempotencyKey: $idempotencyKey, readOnly: true);
     }
 
     /**
@@ -628,15 +654,14 @@ class GameApiService
     {
         $referralCode = is_array($codes) ? implode(',', $codes) : $codes;
 
-        return $this->makeRequest('POST', '/purchases/referrals', ['referral_code' => $referralCode], idempotencyKey: $idempotencyKey);
+        return $this->makeRequest('POST', '/purchases/referrals', ['referral_code' => $referralCode], idempotencyKey: $idempotencyKey, readOnly: true);
     }
 
     /**
      * TASK-028: Fetch game session counts for a specific player and date range.
      * Endpoint: POST /api/v1/stats/customers/played
      *
-     * BUG B2: The API accepts start_date/end_date but ignores them — always returns today's counts.
-     * This is a known API bug; track ticket for the API team to fix.
+     * Returns nested counts: { total, games: {total, 2_players, ...}, tournament: {...}, jackpots: {...} }.
      */
     public function getPlayerGameStats(int $customerId, string $startDate, string $endDate, ?string $idempotencyKey = null): array
     {
@@ -644,7 +669,7 @@ class GameApiService
             'customer_id' => $customerId,
             'start_date' => $startDate,
             'end_date' => $endDate,
-        ], idempotencyKey: $idempotencyKey)['data'] ?? [];
+        ], idempotencyKey: $idempotencyKey, readOnly: true)['data'] ?? [];
     }
 
     /**
@@ -695,23 +720,17 @@ class GameApiService
     }
 
     /**
-     * List all player withdrawals.
-     * Endpoint: GET /api/v1/withdrawals
-     *
-     * BUG: No global withdrawal listing endpoint confirmed in the API spec.
-     * If this returns 404, withdrawals must be fetched per-customer via getCustomerTransactions().
+     * List all player withdrawal requests.
+     * Endpoint: GET /api/v1/withdraws
      */
     public function listWithdrawals(): array
     {
-        return $this->makeRequest('GET', '/withdrawals');
+        return $this->makeRequest('GET', '/withdraws');
     }
 
     /**
-     * List all in-app purchases.
+     * List all non-test in-app purchases.
      * Endpoint: GET /api/v1/purchases
-     *
-     * BUG: No global purchases listing endpoint confirmed in the API spec.
-     * If this returns 404, purchases must be fetched per-customer via getCustomerPurchases().
      */
     public function listPurchases(): array
     {
@@ -738,7 +757,7 @@ class GameApiService
         return $this->makeRequest('POST', '/game/income', [
             'start_date' => $startDate,
             'end_date' => $endDate,
-        ], [], 60, 10, $idempotencyKey)['data'] ?? [];
+        ], [], 60, 10, $idempotencyKey, true)['data'] ?? [];
     }
 
     /**
@@ -754,7 +773,7 @@ class GameApiService
         return $this->makeRequest('POST', "/competition/income/{$enc}", [
             'start_date' => $startDate,
             'end_date' => $endDate,
-        ], [], 60, 10, $idempotencyKey)['data'] ?? [];
+        ], [], 60, 10, $idempotencyKey, true)['data'] ?? [];
     }
 
     /**
@@ -805,12 +824,164 @@ class GameApiService
 
     /**
      * Get the B2C float as a plain numeric value (convenience wrapper for widgets).
+     *
+     * /b2c/balance returns `{"data": null}` until a balance fetch has been recorded, so this
+     * falls back to the b2c accounts on the finance balance sheet.
      */
     public function getB2CBalanceAmount(): float
     {
         $data = $this->getB2CBalance();
 
-        return (float) ($data['balance'] ?? $data['amount'] ?? 0);
+        if (isset($data['balance']) || isset($data['amount'])) {
+            return (float) ($data['balance'] ?? $data['amount']);
+        }
+
+        return (float) collect($this->getCashAccounts())
+            ->where('type', 'b2c')
+            ->sum('amount');
+    }
+
+    // -------------------------------------------------------------------------
+    // Finance reporting — GET /finance/* (read-only, `stats` limiter: 20/min)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Reports the API can export as CSV via GET /finance/export/{report}.
+     *
+     * @var list<string>
+     */
+    public const FINANCE_EXPORTS = [
+        'ledger', 'deposits', 'withdrawals', 'purchases', 'adjustments', 'games', 'competitions',
+        'customers-top', 'cash-flow', 'income-statement', 'trial-balance', 'expenses', 'taxes',
+    ];
+
+    /**
+     * Fetch one finance report and return its `data` payload.
+     *
+     * Common filters: from, to (Y-m-d, max 366 days), group_by (day|week|month), exclude_test,
+     * page, per_page (max 200) plus report-specific filters. Results are cached briefly, matching
+     * the API's own ~2 minute cache, so dashboards and pages share calls under the 20/min limit.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    public function financeReport(string $report, array $filters = [], int $cacheSeconds = 120): array
+    {
+        $path = '/finance/'.ltrim($report, '/');
+
+        $query = collect($filters)
+            ->reject(fn ($value): bool => $value === null || $value === '')
+            ->map(fn ($value) => is_bool($value) ? (int) $value : $value)
+            ->sortKeys()
+            ->all();
+
+        $fetch = fn (): array => $this->makeRequest('GET', $path, query: $query, timeout: 45)['data'] ?? [];
+
+        if ($cacheSeconds <= 0) {
+            return $fetch();
+        }
+
+        return Cache::remember('game_api:finance:'.md5($path.json_encode($query)), $cacheSeconds, $fetch);
+    }
+
+    /**
+     * Dashboard figures for today / week / month / year / all-time plus the balance position.
+     *
+     * @return array<string, mixed>
+     */
+    public function getFinanceSummary(): array
+    {
+        return $this->financeReport('summary');
+    }
+
+    /**
+     * Cash held against what is owed. Pass a past date to see a historical balance sheet.
+     *
+     * @return array<string, mixed>
+     */
+    public function getBalanceSheet(?string $asOf = null): array
+    {
+        return $this->financeReport('balance-sheet', ['as_of' => $asOf]);
+    }
+
+    /**
+     * The 16 ledger / wallet / payment reconciliation controls.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    public function getReconciliation(array $filters = []): array
+    {
+        return $this->financeReport('reconciliation', $filters);
+    }
+
+    /**
+     * Cash accounts (b2c / c2b, working / utility / charges …) from the balance sheet.
+     *
+     * @return list<array{type: string, account: string, amount: float|int, as_of: ?string}>
+     */
+    public function getCashAccounts(): array
+    {
+        return $this->getBalanceSheet()['assets']['cash']['accounts'] ?? [];
+    }
+
+    /**
+     * Wallet statement for a single customer (defaults to the last 30 days).
+     *
+     * @param  array<string, mixed>  $filters  from, to, page, per_page
+     * @return array<string, mixed>
+     */
+    public function getCustomerStatement(int $customerId, array $filters = []): array
+    {
+        $enc = $this->encryptId((string) $customerId);
+
+        return $this->financeReport("customers/{$enc}/statement", $filters);
+    }
+
+    /**
+     * Download a finance report as CSV (UTF-8 with BOM). Fetched server-side so the API key
+     * never reaches the browser.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array{body: string, filename: string}
+     *
+     * @throws GameApiException
+     */
+    public function downloadFinanceCsv(string $report, array $filters = []): array
+    {
+        if (! in_array($report, self::FINANCE_EXPORTS, true)) {
+            throw new GameApiException("Unsupported finance export: {$report}", 422, 'Unsupported export');
+        }
+
+        $query = collect($filters)
+            ->reject(fn ($value): bool => $value === null || $value === '')
+            ->map(fn ($value) => is_bool($value) ? (int) $value : $value)
+            ->all();
+
+        try {
+            $response = Http::withHeaders(['X-API-KEY' => $this->apiKey, 'Accept' => 'text/csv'])
+                ->timeout(60)
+                ->connectTimeout(5)
+                ->get("{$this->baseUrl}/finance/export/{$report}", $query ?: null);
+        } catch (ConnectionException $e) {
+            throw new GameApiException('Game API is unreachable. Please try again later.', 0, $e->getMessage());
+        }
+
+        if ($response->failed()) {
+            $message = $response->status() === 429
+                ? 'Rate limit reached. Please retry shortly.'
+                : (string) ($response->json('message') ?? '');
+
+            throw new GameApiException("Game API error {$response->status()}: {$message}", $response->status(), $message);
+        }
+
+        $filename = 'finance-'.$report.'-'.($filters['from'] ?? 'start').'-'.($filters['to'] ?? 'today').'.csv';
+
+        if (preg_match('/filename="?([^";]+)"?/i', $response->header('Content-Disposition'), $matches) === 1) {
+            $filename = basename($matches[1]);
+        }
+
+        return ['body' => $response->body(), 'filename' => $filename];
     }
 
     // -------------------------------------------------------------------------

@@ -2,28 +2,14 @@
 
 namespace App\Filament\Pages;
 
-use App\Services\GameApiService;
-use App\Support\ApiTablePaginator;
 use App\Support\Format;
-use App\Traits\SuperAdminAccess;
 use BackedEnum;
-use Filament\Pages\Page;
-use Filament\Support\Enums\TextSize;
-use Filament\Tables\Columns\Layout\Split;
-use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Concerns\InteractsWithTable;
-use Filament\Tables\Contracts\HasTable;
-use Filament\Tables\Table;
-use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Facades\Cache;
+use Filament\Tables\Filters\SelectFilter;
 use UnitEnum;
 
-class PlayerWithdrawalsPage extends Page implements HasTable
+class PlayerWithdrawalsPage extends FinanceListReportPage
 {
-    use InteractsWithTable;
-    use SuperAdminAccess;
-
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-arrow-up-tray';
 
     protected static ?string $navigationLabel = 'Player Withdrawals';
@@ -32,79 +18,105 @@ class PlayerWithdrawalsPage extends Page implements HasTable
 
     protected static ?int $navigationSort = 2;
 
-    protected string $view = 'filament.pages.player-withdrawals-page';
+    protected ?string $heading = 'Player Withdrawals';
 
-    public bool $apiError = false;
-
-    public function table(Table $table): Table
+    protected function reportKey(): string
     {
-        return $table
-            ->records(fn (int|string $page, int|string $recordsPerPage, ?string $search, ?string $sortColumn, ?string $sortDirection): LengthAwarePaginator => ApiTablePaginator::make(
-                response: $this->fetchRecords(),
-                page: $page,
-                perPage: $recordsPerPage,
-                search: $search,
-                searchKeys: ['name', 'phone', 'transaction_id'],
-                sortColumn: $sortColumn,
-                sortDirection: $sortDirection,
-            ))
-            ->columns([
-                Split::make([
-                    Stack::make([
-                        TextColumn::make('name')
-                            ->label('Player Name')
-                            ->weight('bold')
-                            ->searchable()
-                            ->sortable(),
-                        TextColumn::make('phone')
-                            ->label('Phone')
-                            ->searchable()
-                            ->color('gray')
-                            ->size(TextSize::Small),
-                    ]),
-                    Stack::make([
-                        TextColumn::make('amount')
-                            ->label('Amount')
-                            ->sortable()
-                            ->weight('bold')
-                            ->formatStateUsing(fn ($state): string => Format::money($state)),
-                        TextColumn::make('date')
-                            ->label('Date')
-                            ->sortable()
-                            ->color('gray')
-                            ->size(TextSize::Small),
-                    ])->visibleFrom('md'),
-                    TextColumn::make('transaction_id')
-                        ->label('Transaction ID')
-                        ->searchable()
-                        ->copyable()
-                        ->visibleFrom('md'),
-                ])->from('md'),
-            ])
-            ->emptyStateIcon('heroicon-o-arrow-up-tray')
-            ->emptyStateHeading(fn (): string => $this->apiError ? 'Withdrawals unavailable' : 'No withdrawals found')
-            ->emptyStateDescription(fn (): string => $this->apiError
-                ? 'The wallet API has no global withdrawals endpoint, or could not be reached. See TODO.md.'
-                : 'No withdrawals have been recorded yet.')
-            ->striped();
+        return 'withdrawals';
     }
 
-    /**
-     * @return array<int|string, mixed>
-     */
-    protected function fetchRecords(): array
+    protected function exportKey(): ?string
     {
-        try {
-            // TODO: GameApi exposes no global /withdrawals listing endpoint (returns 404).
-            // Withdrawals are only available per-customer via getCustomerTransactions(). See TODO.md.
-            $records = Cache::remember('player_withdrawals_page', 300, fn (): array => app(GameApiService::class)->listWithdrawals());
-            $this->apiError = false;
+        return 'withdrawals';
+    }
 
-            return $records;
-        } catch (\Throwable) {
-            $this->apiError = true;
+    protected function extraFilters(): array
+    {
+        return ['status' => $this->filterValue('status')];
+    }
 
-            return [];
-        }
+    protected function summaryStats(array $data): array
+    {
+        $summary = $data['summary'] ?? [];
+        $stuck = $summary['stuck_pending'] ?? [];
+        $oldest = $summary['oldest_pending_hours'] ?? null;
+
+        return [
+            ['label' => 'Payouts', 'value' => number_format((int) ($summary['payments'] ?? 0)), 'description' => 'In the selected period', 'icon' => 'heroicon-m-arrow-up-tray', 'color' => 'primary'],
+            ['label' => 'Total Requested', 'value' => Format::money($summary['amount'] ?? 0), 'icon' => 'heroicon-m-banknotes', 'color' => 'success'],
+            ['label' => 'Stuck Pending', 'value' => Format::money($stuck['amount'] ?? 0), 'description' => number_format((int) ($stuck['payments'] ?? 0)).' pending over '.($stuck['threshold_hours'] ?? 24).'h', 'icon' => 'heroicon-m-exclamation-triangle', 'color' => ($stuck['payments'] ?? 0) > 0 ? 'danger' : 'gray'],
+            ['label' => 'Oldest Pending', 'value' => $oldest === null ? '—' : number_format((float) $oldest, 1).' h', 'description' => 'Time since the oldest unpaid request', 'icon' => 'heroicon-m-clock', 'color' => 'warning'],
+        ];
+    }
+
+    protected function blocks(array $data): array
+    {
+        $summary = $data['summary'] ?? [];
+
+        return [
+            [
+                'title' => 'By status',
+                'headers' => ['Status', 'Payouts', 'Amount'],
+                'rows' => collect($summary['by_status'] ?? [])
+                    ->map(fn (array $row, string $status): array => [ucfirst($status), number_format((int) ($row['payments'] ?? 0)), Format::money($row['amount'] ?? 0)])
+                    ->values()
+                    ->all(),
+            ],
+            [
+                'title' => 'Failure reasons',
+                'headers' => ['Reason', 'Payouts', 'Amount'],
+                'rows' => collect($summary['failure_reasons'] ?? [])
+                    ->map(fn (array $row, $key): array => [
+                        (string) ($row['reason'] ?? (is_string($key) ? $key : '—')),
+                        number_format((int) ($row['payments'] ?? $row['count'] ?? 0)),
+                        Format::money($row['amount'] ?? 0),
+                    ])
+                    ->values()
+                    ->all(),
+            ],
+        ];
+    }
+
+    protected function columns(): array
+    {
+        return [
+            TextColumn::make('created_at')
+                ->label('Date')
+                ->formatStateUsing(fn ($state): string => Format::dateTime($state)),
+            TextColumn::make('customer_name')
+                ->label('Player')
+                ->weight('bold')
+                ->placeholder('—'),
+            TextColumn::make('status')
+                ->badge()
+                ->color(fn (?string $state): string => match ($state) {
+                    'paid' => 'success',
+                    'pending' => 'warning',
+                    'failed' => 'danger',
+                    default => 'gray',
+                })
+                ->formatStateUsing(fn (?string $state): string => ucfirst((string) $state)),
+            TextColumn::make('failure_reason')
+                ->label('Failure Reason')
+                ->color('gray')
+                ->placeholder('—'),
+            TextColumn::make('amount')
+                ->label('Amount')
+                ->weight('bold')
+                ->alignEnd()
+                ->formatStateUsing(fn ($state): string => Format::money($state)),
+        ];
+    }
+
+    protected function tableFilterDefinitions(): array
+    {
+        return [
+            SelectFilter::make('status')->options(['pending' => 'Pending', 'paid' => 'Paid', 'failed' => 'Failed']),
+        ];
+    }
+
+    protected function emptyHeading(): string
+    {
+        return 'No withdrawals found';
     }
 }

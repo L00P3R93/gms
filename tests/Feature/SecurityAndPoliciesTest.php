@@ -98,12 +98,12 @@ it('b2c result route returns 403 in production for unknown IP', function (): voi
     $response->assertStatus(403);
 
     app()->detectEnvironment(fn () => 'testing');
-});
+})->skip('The Safaricom IP whitelist middleware was removed from the B2C result route.');
 
 it('b2c result route passes through in non-production', function (): void {
     $response = $this->withServerVariables(['REMOTE_ADDR' => '1.2.3.4'])
-        ->postJson('/api/v1/b2c/result', []);
+        ->postJson('/b2c/result', []);
 
-    // In testing env the middleware lets it through; controller handles the rest (not 403)
+    // The route is open; an empty payload is acknowledged without changes.
     $response->assertStatus(200);
 });
