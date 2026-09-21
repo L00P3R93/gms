@@ -2,95 +2,103 @@
 
 namespace App\Filament\Pages;
 
-use App\Services\GameApiService;
-use App\Support\ApiTablePaginator;
 use App\Support\Format;
-use App\Traits\SuperAdminAccess;
 use BackedEnum;
-use Filament\Pages\Page;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Concerns\InteractsWithTable;
-use Filament\Tables\Contracts\HasTable;
-use Filament\Tables\Table;
-use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Facades\Cache;
 use UnitEnum;
 
-class PurchasesPage extends Page implements HasTable
+class PurchasesPage extends FinanceListReportPage
 {
-    use InteractsWithTable;
-    use SuperAdminAccess;
-
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-shopping-cart';
 
     protected static ?string $navigationLabel = 'Purchases';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Financial';
+    protected static string|UnitEnum|null $navigationGroup = '📊 Financial';
 
     protected static ?int $navigationSort = 3;
 
-    protected string $view = 'filament.pages.purchases-page';
+    protected ?string $heading = 'Purchases';
 
-    public bool $apiError = false;
-
-    protected static bool $shouldRegisterNavigation = false;
-
-    public function table(Table $table): Table
+    protected function reportKey(): string
     {
-        return $table
-            ->records(fn (int|string $page, int|string $recordsPerPage, ?string $search, ?string $sortColumn, ?string $sortDirection): LengthAwarePaginator => ApiTablePaginator::make(
-                response: $this->fetchRecords(),
-                page: $page,
-                perPage: $recordsPerPage,
-                search: $search,
-                searchKeys: ['name', 'type'],
-                sortColumn: $sortColumn,
-                sortDirection: $sortDirection,
-            ))
-            ->columns([
-                TextColumn::make('name')
-                    ->label('Player Name')
-                    ->searchable()
-                    ->sortable(),
-                TextColumn::make('type')
-                    ->label('Type')
-                    ->badge()
-                    ->color('info')
-                    ->searchable(),
-                TextColumn::make('amount')
-                    ->label('Amount')
-                    ->sortable()
-                    ->formatStateUsing(fn ($state): string => Format::money($state)),
-                TextColumn::make('value')
-                    ->label('Value'),
-                TextColumn::make('date')
-                    ->label('Date')
-                    ->sortable(),
-            ])
-            ->emptyStateIcon('heroicon-o-shopping-cart')
-            ->emptyStateHeading(fn (): string => $this->apiError ? 'Purchases unavailable' : 'No purchases found')
-            ->emptyStateDescription(fn (): string => $this->apiError
-                ? 'The wallet API could not be reached. Refresh the page to try again.'
-                : 'No purchases have been recorded yet.')
-            ->striped();
+        return 'purchases';
     }
 
-    /**
-     * @return array<int|string, mixed>
-     */
-    protected function fetchRecords(): array
+    protected function exportKey(): ?string
     {
-        try {
-            // TODO: GameApi has no global /purchases listing endpoint; listPurchases()
-            // returns a limited payload. Per-customer data is available via getCustomerPurchases().
-            $records = Cache::remember('purchases_page', 300, fn (): array => app(GameApiService::class)->listPurchases());
-            $this->apiError = false;
+        return 'purchases';
+    }
 
-            return $records;
-        } catch (\Throwable) {
-            $this->apiError = true;
+    protected function summaryStats(array $data): array
+    {
+        $summary = $data['summary'] ?? [];
 
-            return [];
-        }
+        return [
+            ['label' => 'Purchases', 'value' => number_format((int) ($summary['purchases'] ?? 0)), 'description' => 'Loads, gifts and emojis', 'icon' => 'heroicon-m-shopping-cart', 'color' => 'primary'],
+            ['label' => 'Total Paid', 'value' => Format::money($summary['amount'] ?? 0), 'icon' => 'heroicon-m-banknotes', 'color' => 'success'],
+        ];
+    }
+
+    protected function blocks(array $data): array
+    {
+        $summary = $data['summary'] ?? [];
+        $money = fn ($value): string => Format::money($value);
+
+        return [
+            [
+                'title' => 'By type',
+                'headers' => ['Type', 'Purchases', 'Amount'],
+                'rows' => collect($summary['by_type'] ?? [])
+                    ->map(fn (array $row, $key): array => [
+                        ucfirst((string) ($row['type'] ?? (is_string($key) ? $key : '—'))),
+                        number_format((int) ($row['purchases'] ?? $row['count'] ?? 0)),
+                        $money($row['amount'] ?? 0),
+                    ])
+                    ->values()
+                    ->all(),
+            ],
+            [
+                'title' => 'Trend',
+                'description' => 'Per '.($data['meta']['period']['group_by'] ?? 'day'),
+                'headers' => ['Period', 'Loads', 'Gifts', 'Emojis', 'Total'],
+                'rows' => collect($summary['series'] ?? [])
+                    ->map(fn (array $row): array => [
+                        $row['period'] ?? '—',
+                        $money($row['load'] ?? 0),
+                        $money($row['gift'] ?? 0),
+                        $money($row['emoji'] ?? 0),
+                        $money($row['total'] ?? 0),
+                    ])
+                    ->all(),
+            ],
+        ];
+    }
+
+    protected function columns(): array
+    {
+        return [
+            TextColumn::make('created_at')
+                ->label('Date')
+                ->formatStateUsing(fn ($state): string => Format::dateTime($state)),
+            TextColumn::make('customer_name')
+                ->label('Player')
+                ->weight('bold')
+                ->placeholder('—'),
+            TextColumn::make('type')
+                ->badge()
+                ->color('info')
+                ->state(fn (array $record): ?string => $record['type'] ?? $record['purchase_type'] ?? null)
+                ->formatStateUsing(fn (?string $state): string => ucfirst((string) $state)),
+            TextColumn::make('amount')
+                ->label('Amount')
+                ->weight('bold')
+                ->alignEnd()
+                ->formatStateUsing(fn ($state): string => Format::money($state)),
+        ];
+    }
+
+    protected function emptyHeading(): string
+    {
+        return 'No purchases found';
     }
 }

@@ -13,7 +13,7 @@ class MpesaBalanceStatsWidget extends BaseWidget
 
     protected int|string|array $columnSpan = 'full';
 
-    protected static ?int $sort = 4;
+    protected static ?int $sort = 20;
 
     protected ?string $heading = 'M-Pesa Account Balances';
 

@@ -71,14 +71,34 @@ class Format
      */
     public static function formatNumber(int $number): string
     {
-        if ($number < 1000) {
+        $sign = $number < 0 ? '-' : '';
+        $magnitude = abs($number);
+
+        if ($magnitude < 1000) {
             return (string) Number::format($number, 0);
         }
 
-        if ($number < 1000000) {
-            return Number::format($number / 1000, 2).'k';
+        if ($magnitude < 1000000) {
+            return $sign.Number::format($magnitude / 1000, 2).'k';
         }
 
-        return Number::format($number / 1000000, 2).'M';
+        return $sign.Number::format($magnitude / 1000000, 2).'M';
+    }
+
+    /**
+     * Simplified figure for dashboard widgets: {@see formatNumber()} on the whole
+     * number, or a dash when the value is null, empty or an integer zero.
+     */
+    public static function compact(int|float|string|null $value): string
+    {
+        return $value !== null && $value !== '' && $value !== 0 ? self::formatNumber((int) $value) : '—';
+    }
+
+    /**
+     * {@see compact()} prefixed with the currency, e.g. `KES 1.85M`.
+     */
+    public static function compactMoney(int|float|string|null $value): string
+    {
+        return 'KES '.self::compact($value);
     }
 }

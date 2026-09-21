@@ -15,11 +15,11 @@ class IncomeStatsOverviewWidget extends StatsOverviewWidget
 {
     protected ?string $pollingInterval = '60s';
 
-    protected static ?int $sort = 2;
+    protected static ?int $sort = 10;
 
     protected ?string $heading = 'Todays Income Breakdown Summary';
 
-    protected int|string|array $columnSpan = 3;
+    protected int|string|array $columnSpan = 'full';
 
     public static function canView(): bool
     {
@@ -48,24 +48,24 @@ class IncomeStatsOverviewWidget extends StatsOverviewWidget
                 ->send();
         }
 
-        $income = $stats['income'];
-        $singleGamesIncome = $income['games'];
-        $totalSingleGamesIncome = $singleGamesIncome['total'];
-        $_2PlayerGamesIncome = $singleGamesIncome['2_players'];
-        $_3PlayerGamesIncome = $singleGamesIncome['3_players'];
-        $_4PlayerGamesIncome = $singleGamesIncome['4_players'];
+        $income = $stats['income'] ?? [];
+        $singleGamesIncome = $income['games'] ?? [];
+        $totalSingleGamesIncome = $singleGamesIncome['total'] ?? 0;
+        $_2PlayerGamesIncome = $singleGamesIncome['2_players'] ?? null;
+        $_3PlayerGamesIncome = $singleGamesIncome['3_players'] ?? null;
+        $_4PlayerGamesIncome = $singleGamesIncome['4_players'] ?? null;
 
-        $tournamentsIncome = $income['tournaments'];
-        $totalTournamentsIncome = $tournamentsIncome['total'];
-        $_3RoundsTournamentsIncome = $tournamentsIncome['3_rounds'];
-        $_4RoundsTournamentsIncome = $tournamentsIncome['4_rounds'];
-        $_5RoundsTournamentsIncome = $tournamentsIncome['5_rounds'];
+        $tournamentsIncome = $income['tournaments'] ?? [];
+        $totalTournamentsIncome = $tournamentsIncome['total'] ?? 0;
+        $_3RoundsTournamentsIncome = $tournamentsIncome['3_rounds'] ?? null;
+        $_4RoundsTournamentsIncome = $tournamentsIncome['4_rounds'] ?? null;
+        $_5RoundsTournamentsIncome = $tournamentsIncome['5_rounds'] ?? null;
 
-        $jackpotsIncome = $income['jackpots'];
-        $totalJackpotsIncome = $jackpotsIncome['total'];
-        $_13RoundsJackpotsIncome = $jackpotsIncome['13_rounds'];
-        $_17RoundsJackpotsIncome = $jackpotsIncome['17_rounds'];
-        $_21RoundsJackpotsIncome = $jackpotsIncome['21_rounds'];
+        $jackpotsIncome = $income['jackpots'] ?? [];
+        $totalJackpotsIncome = $jackpotsIncome['total'] ?? 0;
+        $_13RoundsJackpotsIncome = $jackpotsIncome['13_rounds'] ?? null;
+        $_17RoundsJackpotsIncome = $jackpotsIncome['17_rounds'] ?? null;
+        $_21RoundsJackpotsIncome = $jackpotsIncome['21_rounds'] ?? null;
 
         $fmt = fn ($v) => $v !== null && $v !== '' && $v !== 0 ? Format::formatNumber((int) $v) : '—';
         $fmtInt = fn ($v) => $v !== null && $v !== '' && $v !== 0 ? Format::formatNumber((int) $v) : '—';

@@ -16,7 +16,7 @@ class StatsOverview extends BaseWidget
 
     protected ?string $pollingInterval = '60s';
 
-    protected int|string|array $columnSpan = 3;
+    protected int|string|array $columnSpan = 'full';
 
     protected ?string $heading = 'Overall Summary';
 
@@ -64,22 +64,22 @@ class StatsOverview extends BaseWidget
                 ->send();
         }
 
-        $customer = $stats['customer'];
-        $income = $stats['income'];
-        $totalIncome = $income['games']['total'] + $income['tournaments']['total'] + $income['jackpots']['total'];
-        $played = $stats['played'];
-        $purchases = $stats['purchases'];
+        $customer = $stats['customer'] ?? [];
+        $income = $stats['income'] ?? [];
+        $totalIncome = ($income['games']['total'] ?? 0) + ($income['tournaments']['total'] ?? 0) + ($income['jackpots']['total'] ?? 0);
+        $played = $stats['played'] ?? [];
+        $purchases = $stats['purchases'] ?? [];
 
         $fmt = fn ($v) => $v !== null && $v !== '' && $v !== 0 ? Format::formatNumber((int) $v) : '—';
         $fmtInt = fn ($v) => $v !== null && $v !== '' && $v !== 0 ? Format::formatNumber((int) $v) : '—';
 
         return [
-            Stat::make('Total Customers', $fmtInt($customer['this_year'].'Customers' ?? null))
+            Stat::make('Total Customers', $fmtInt($customer['this_year'] ?? null))
                 ->description("Today: {$fmtInt($customer['today'] ?? null)} · week: {$fmtInt($customer['this_week'] ?? null)} · month: {$fmtInt($customer['this_month'] ?? null)}")
                 ->descriptionIcon('heroicon-m-users')
                 ->color($apiError ? 'gray' : 'primary'),
 
-            Stat::make('Games Played Today', $fmtInt($played['total'].'Games' ?? null))
+            Stat::make('Games Played Today', $fmtInt($played['total'] ?? null))
                 ->description("S: {$fmtInt($played['games']['total'] ?? null)} · T: {$fmtInt($played['tournament']['total'] ?? null)} · J: {$fmtInt($played['jackpots']['total'] ?? null)}")
                 ->descriptionIcon('heroicon-m-play-circle')
                 ->color($apiError ? 'gray' : 'warning'),

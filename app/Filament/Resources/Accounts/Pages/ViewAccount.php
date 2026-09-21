@@ -2,10 +2,12 @@
 
 namespace App\Filament\Resources\Accounts\Pages;
 
+use App\Filament\Pages\CustomerStatementReport;
 use App\Filament\Resources\Accounts\AccountResource;
 use App\Models\Account;
 use App\Services\GameApiService;
 use App\Support\Format;
+use Filament\Actions\Action;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
@@ -41,6 +43,21 @@ class ViewAccount extends Page
     {
         $this->customerId = (int) $record;
         $this->loadApiData();
+    }
+
+    /**
+     * @return array<int, Action>
+     */
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('walletStatement')
+                ->label('Wallet statement')
+                ->icon('heroicon-o-document-text')
+                ->color('gray')
+                ->visible(fn (): bool => CustomerStatementReport::canAccess())
+                ->url(fn (): string => CustomerStatementReport::getUrl(['customerId' => $this->customerId])),
+        ];
     }
 
     private function loadApiData(): void

@@ -54,6 +54,26 @@ class ApiTablePaginator
     }
 
     /**
+     * Wrap a `/finance/*` report payload — `items` plus a `pagination` block
+     * (page, per_page, total, last_page) — for a server-paged Filament table.
+     * The API has already applied page and filters, so nothing is sliced here.
+     *
+     * @param  array<string, mixed>  $report  The report's `data` payload.
+     */
+    public static function fromReport(array $report): LengthAwarePaginator
+    {
+        $pagination = is_array($report['pagination'] ?? null) ? $report['pagination'] : [];
+        $rows = self::rows($report['items'] ?? []);
+
+        return self::paginator(
+            $rows->all(),
+            (int) ($pagination['total'] ?? $rows->count()),
+            max(1, (int) ($pagination['per_page'] ?? max(1, $rows->count()))),
+            max(1, (int) ($pagination['page'] ?? 1)),
+        );
+    }
+
+    /**
      * A payload is paginated when a `data` array sits alongside pagination
      * totals — either flat keys or a nested `meta` block.
      */
