@@ -6,8 +6,14 @@ use App\Filament\Pages\ApiExpensesReport;
 use App\Filament\Pages\BalanceSheetReport;
 use App\Filament\Pages\CashFlowReport;
 use App\Filament\Pages\CompetitionsReport;
+use App\Filament\Pages\ComplaintDetailPage;
 use App\Filament\Pages\CustomerStatementReport;
 use App\Filament\Pages\DepositsPage;
+use App\Filament\Pages\DisputesReport;
+use App\Filament\Pages\ExciseChargesReport;
+use App\Filament\Pages\ExciseDutyReport;
+use App\Filament\Pages\ExciseRemittancesReport;
+use App\Filament\Pages\ExciseReturnsReport;
 use App\Filament\Pages\GamesReport;
 use App\Filament\Pages\IncomeStatementReport;
 use App\Filament\Pages\LedgerReport;
@@ -18,6 +24,7 @@ use App\Filament\Pages\ReconciliationReport;
 use App\Filament\Pages\TaxesReport;
 use App\Filament\Pages\TopCustomersReport;
 use App\Filament\Pages\TrialBalanceReport;
+use App\Filament\Widgets\ExciseDutyWidget;
 use App\Filament\Widgets\FinanceOverviewWidget;
 use App\Filament\Widgets\PlatformPositionWidget;
 use App\Filament\Widgets\PlayerEngagementWidget;
@@ -25,11 +32,16 @@ use App\Filament\Widgets\StakesVersusPayoutsChartWidget;
 use App\Filament\Widgets\StatsOverview;
 use App\Filament\Widgets\TopCustomersWidget;
 use App\Models\User;
+use Filament\Actions\Testing\TestAction;
+use Filament\Notifications\Notification;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 use function Pest\Laravel\get;
 
@@ -47,7 +59,7 @@ function financeFixture(): array
     $meta = ['period' => ['from' => '2026-09-01', 'to' => '2026-09-21', 'group_by' => 'day'], 'warnings' => ['Ledger warning shown to admins.']];
     $pagination = ['page' => 1, 'per_page' => 25, 'total' => 1, 'last_page' => 1];
 
-    $liabilities = ['customer_wallets' => 900, 'game_escrow' => 50, 'competition_escrow' => 25, 'stuck_escrow' => 7, 'unmatched_deposits' => 122510, 'total' => 1500];
+    $liabilities = ['customer_wallets' => 900, 'game_escrow' => 50, 'competition_escrow' => 25, 'stuck_escrow' => 7, 'unmatched_deposits' => 122510, 'excise_duty_payable' => 25, 'disputed_funds' => 40, 'total' => 1500];
     $cash = ['accounts' => [['type' => 'b2c', 'account' => 'Utility Account', 'amount' => 28772, 'as_of' => '2026-09-05T11:57:40+03:00']], 'total' => 28772];
 
     return [
@@ -56,6 +68,26 @@ function financeFixture(): array
         'income-statement' => ['meta' => $meta, 'revenue' => ['games' => 10, 'tournaments' => ['total' => 5, 'by_rounds' => ['3' => 5]], 'jackpots' => ['total' => 0, 'by_rounds' => []],
             'competitions_unattributed' => 1, 'gift_emoji_sales' => ['total' => 0], 'other' => 0, 'total' => 16, 'games_by_source' => ['game_credit' => 10]],
             'expenses' => ['tracked' => true, 'total' => 2, 'by_category' => []], 'net_income' => 14, 'series' => [['period' => '2026-09-01', 'games' => 10, 'tournaments' => 5, 'jackpots' => 0, 'total' => 15, 'expenses' => 1, 'net_income' => 14]]],
+        'excise-duty' => ['meta' => $meta, 'enabled' => true, 'rate' => 0.05, 'effective_from' => '2026-09-01',
+            'totals' => ['deposits' => 2, 'gross_deposits' => 300, 'excise_charged' => 15, 'excise_reversed' => 0, 'excise_net' => 15, 'excise_remitted' => 0],
+            'payable' => ['outstanding' => 18, 'oldest_unremitted_at' => '2026-08-12T10:00:00+03:00'], 'series' => [], 'notes' => []],
+        'excise-duty/returns' => ['meta' => $meta, 'filing_day' => 20, 'payable' => 18, 'items' => [
+            ['period' => '2026-08', 'period_start' => '2026-08-01', 'period_end' => '2026-08-31', 'due_date' => '2026-09-20', 'charges' => 1, 'gross_deposits' => 60, 'excise_charged' => 3, 'excise_reversed' => 0, 'excise_due' => 3, 'excise_remitted' => 0, 'outstanding' => 3, 'overdue' => true],
+            ['period' => '2026-07', 'period_start' => '2026-07-01', 'period_end' => '2026-07-31', 'due_date' => '2026-08-20', 'charges' => 2, 'gross_deposits' => 300, 'excise_charged' => 15, 'excise_reversed' => 0, 'excise_due' => 15, 'excise_remitted' => 15, 'outstanding' => 0, 'overdue' => false],
+        ]],
+        'excise-duty/charges' => ['meta' => $meta, 'summary' => ['charges' => 1, 'gross_deposits' => 100, 'excise' => 5,
+            'by_status' => ['charged' => ['charges' => 1, 'gross_deposits' => 100, 'excise' => 5]], 'unremitted' => ['charges' => 1, 'excise' => 5]],
+            'items' => [['id' => 1, 'charged_at' => '2026-09-19T10:00:00+03:00', 'deposit_id' => 9, 'trans_id' => 'QWE123XYZ', 'customer_id' => 5, 'customer_name' => 'Achieng', 'msisdn' => '2547****5678',
+                'gross_amount' => 100, 'rate' => 0.05, 'excise_amount' => 5, 'net_amount' => 95, 'status' => 'charged', 'remittance_id' => null, 'kra_reference' => null]], 'pagination' => $pagination],
+        'excise-duty/remittances' => ['meta' => $meta, 'summary' => ['active' => ['remittances' => 1, 'amount_due' => 15, 'amount_paid' => 15], 'voided' => ['remittances' => 0, 'amount_due' => 0, 'amount_paid' => 0], 'payable' => 18],
+            'items' => [['id' => 7, 'period_start' => '2026-07-01', 'period_end' => '2026-07-31', 'charges' => 2, 'amount_due' => 15, 'amount_paid' => 15, 'difference' => 0,
+                'kra_reference' => 'KRA-REF-001', 'paid_at' => '2026-08-15', 'status' => 'active', 'recorded_by' => 'api_key:4', 'created_at' => '2026-08-15T10:00:00+03:00']], 'pagination' => $pagination],
+        'disputes' => ['meta' => $meta, 'summary' => ['by_status' => [
+            'pending_dispute' => ['complaints' => 1, 'disputed' => 190, 'held' => 150, 'shortfall' => 40, 'refunded' => 0, 'house_cuts_reversed' => 0, 'released' => 0],
+            'resolved' => ['complaints' => 1, 'disputed' => 180, 'held' => 180, 'shortfall' => 0, 'refunded' => 200, 'house_cuts_reversed' => 20, 'released' => 0],
+        ], 'currently_held' => 150],
+            'items' => [['id' => 3, 'complaint_id' => '9b1c2f0e-6a57-4f7e-9d0a-1f3c5b8e2a41', 'filed_at' => '2026-09-19T14:05:00+03:00', 'customer_id' => 42, 'subject_type' => 'game', 'game_wallet_id' => 1051,
+                'reason' => 'Unfair result', 'status' => 'pending_dispute', 'disputed_amount' => 190, 'held_amount' => 150, 'shortfall_amount' => 40, 'still_held' => 150, 'refunded_amount' => 0, 'house_cuts_reversed' => 0, 'released_amount' => 0]], 'pagination' => $pagination],
         'cash-flow' => ['meta' => $meta, 'totals' => ['cash_in' => ['unmatched' => 100, 'total' => 100], 'cash_out' => ['paid' => 0, 'pending' => 0, 'failed' => 0], 'net_cash' => 100], 'series' => []],
         'balance-sheet' => ['as_of' => '2026-09-21', 'source' => 'live', 'assets' => ['cash' => $cash, 'total' => 28772], 'liabilities' => $liabilities, 'house_wallet' => 500, 'difference' => -1, 'notes' => ['A note']],
         'trial-balance' => ['meta' => $meta, 'lines' => [['account' => 'game_escrow', 'entry_type' => 'game_bet', 'category' => 'stake', 'debit' => 0, 'credit' => 10, 'entries' => 1]],
@@ -84,6 +116,28 @@ function financeFixture(): array
     ];
 }
 
+/**
+ * Answers any `/finance/{report}` GET with that report's fixture.
+ */
+function financeFixtureStub(): Closure
+{
+    $fixture = financeFixture();
+
+    return fn ($request) => Http::response(['success' => true, 'data' => $fixture[trim(explode('?', explode('/finance/', $request->url())[1])[0], '/')] ?? []], 200);
+}
+
+/**
+ * Replace the fakes with the given stubs ahead of the finance fixtures (the first matching stub wins).
+ *
+ * @param  array<string, mixed>  $stubs
+ */
+function fakeFinanceApi(array $stubs): void
+{
+    Http::swap(new Factory);
+    Http::preventStrayRequests();
+    Http::fake([...$stubs, '*/finance/*' => financeFixtureStub()]);
+}
+
 beforeEach(function (): void {
     Cache::flush();
 
@@ -93,8 +147,6 @@ beforeEach(function (): void {
         'services.game_api.openssl_key' => 'a9378f354771d2bdf46c1fd1b5bcaf38',
     ]);
 
-    $fixture = financeFixture();
-
     Http::fake([
         '*/finance/customers/*/statement*' => Http::response(['data' => [
             'customer' => ['id' => 5, 'name' => 'Kim', 'account_no' => 'KK-1'], 'wallet' => ['balance_now' => 100],
@@ -103,7 +155,7 @@ beforeEach(function (): void {
             'pagination' => ['page' => 1, 'per_page' => 25, 'total' => 1, 'last_page' => 1],
         ]], 200),
         '*/finance/export/*' => Http::response("\xEF\xBB\xBFid\n1\n", 200, ['Content-Disposition' => 'attachment; filename="finance-ledger.csv"']),
-        '*/finance/*' => fn ($request) => Http::response(['success' => true, 'data' => $fixture[trim(explode('?', explode('/finance/', $request->url())[1])[0], '/')] ?? []], 200),
+        '*/finance/*' => financeFixtureStub(),
         '*/stats/retention' => Http::response(['data' => ['today' => 16, 'week' => 20, 'month' => 147, 'year' => 278, 'total_players' => 278]], 200),
         '*/customers/combined-leaderboard' => Http::response(['leaderboard' => [['id' => 1, 'name' => 'Ada Lovelace', 'single_game_wins' => 10, 'competition_wins' => 5, 'total_wins' => 15]]], 200),
     ]);
@@ -133,6 +185,11 @@ dataset('finance pages', [
     'ledger' => [LedgerReport::class, 'game_escrow'],
     'adjustments' => [AdjustmentsReport::class, 'Kim'],
     'expenses' => [ApiExpensesReport::class, 'INV-1'],
+    'excise duty' => [ExciseDutyReport::class, 'Unremitted since 12 Aug 2026'],
+    'excise charges' => [ExciseChargesReport::class, 'QWE123XYZ'],
+    'excise returns' => [ExciseReturnsReport::class, 'Overdue'],
+    'kra remittances' => [ExciseRemittancesReport::class, 'KRA-REF-001'],
+    'disputes' => [DisputesReport::class, '9b1c2f0e'],
 ]);
 
 it('renders each finance report for an admin with data from the API', function (string $page, string $expected): void {
@@ -157,6 +214,8 @@ function dataset_pages(): array
         ReconciliationReport::class, TaxesReport::class, TopCustomersReport::class, DepositsPage::class,
         PlayerWithdrawalsPage::class, PurchasesPage::class, GamesReport::class, CompetitionsReport::class,
         LedgerReport::class, AdjustmentsReport::class, ApiExpensesReport::class, CustomerStatementReport::class,
+        ExciseDutyReport::class, ExciseChargesReport::class, ExciseReturnsReport::class, ExciseRemittancesReport::class,
+        DisputesReport::class,
     ];
 }
 
@@ -255,6 +314,7 @@ it('shows the admin finance widgets to admins and hides them from other roles', 
 })->with([
     FinanceOverviewWidget::class,
     PlatformPositionWidget::class,
+    ExciseDutyWidget::class,
     PlayerEngagementWidget::class,
     StakesVersusPayoutsChartWidget::class,
     TopCustomersWidget::class,
@@ -267,9 +327,36 @@ it('renders the finance overview and platform position widgets with API figures'
     Livewire::test(PlatformPositionWidget::class)
         ->assertSee('KES 122.51k')
         ->assertSee('FAIL')
-        ->assertSee('B2C KES 28.77k');
+        ->assertSee('B2C KES 28.77k')
+        ->assertSee('Excise KES 25 · Disputes KES 40');
     Livewire::test(PlayerEngagementWidget::class)->assertSee('278');
     Livewire::test(TopCustomersWidget::class)->assertSee('Minks');
+});
+
+it('shows what is owed to KRA and flags overdue excise duty returns', function (): void {
+    $this->actingAs($this->admin);
+
+    Livewire::test(ExciseDutyWidget::class)
+        ->assertSee('KES 18.00')
+        ->assertSee('Unremitted since 12 Aug 2026')
+        ->assertSee('KES 15.00')
+        ->assertSee('On KES 300 deposits at 5%')
+        ->assertSee('Overdue Returns')
+        ->assertSee('KES 3.00 past the due date');
+});
+
+it('shows the next excise duty return when none is overdue', function (): void {
+    Http::swap(new Factory);
+    Http::fake(['*/finance/excise-duty/returns*' => Http::response(['success' => true, 'data' => ['items' => [
+        ['period' => '2026-09', 'period_start' => '2026-09-01', 'due_date' => '2026-10-20', 'outstanding' => 12, 'overdue' => false],
+    ]]])]);
+    Http::fake(['*/finance/excise-duty*' => Http::response(['success' => true, 'data' => ['payable' => ['outstanding' => 12]]])]);
+    $this->actingAs($this->admin);
+
+    Livewire::test(ExciseDutyWidget::class)
+        ->assertDontSee('Overdue Returns')
+        ->assertSee('20 Oct 2026')
+        ->assertSee('KES 12.00 for Sep 2026');
 });
 
 it('keeps the finance widgets rendering when the API is down', function (): void {
@@ -278,6 +365,7 @@ it('keeps the finance widgets rendering when the API is down', function (): void
 
     Livewire::test(FinanceOverviewWidget::class)->assertOk();
     Livewire::test(PlatformPositionWidget::class)->assertOk();
+    Livewire::test(ExciseDutyWidget::class)->assertOk()->assertSee('Excise Payable');
     Livewire::test(PlayerEngagementWidget::class)->assertOk();
     Livewire::test(TopCustomersWidget::class)->assertOk()->assertSee('Top customers unavailable');
 });
@@ -296,4 +384,169 @@ it('renders the overall summary widget with dashes when the stats API fails', fu
     $this->actingAs($this->admin);
 
     Livewire::test(StatsOverview::class)->assertOk()->assertSee('Total Customers')->assertSee('—');
+});
+
+// --- Excise duty and disputes ---
+
+it('sends the charge filters and a year of remittances to the API', function (): void {
+    $this->travelTo('2026-09-23 12:00:00');
+    $this->actingAs($this->admin);
+
+    Livewire::test(ExciseChargesReport::class)
+        ->filterTable('status', 'unremitted')
+        ->filterTable('customer', ['customer_id' => 5])
+        ->assertOk();
+    Livewire::test(ExciseRemittancesReport::class)->assertOk();
+
+    Http::assertSent(function ($request): bool {
+        parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+        return str_contains($request->url(), '/finance/excise-duty/charges')
+            && ($query['status'] ?? null) === 'unremitted'
+            && ($query['customer_id'] ?? null) === '5';
+    });
+    Http::assertSent(function ($request): bool {
+        parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+        return str_contains($request->url(), '/finance/excise-duty/remittances')
+            && ($query['status'] ?? null) === 'active'
+            && ($query['from'] ?? null) === '2026-01-01';
+    });
+});
+
+it('streams the excise duty and dispute exports', function (string $report): void {
+    $this->actingAs($this->admin);
+
+    get(route('finance.export', ['report' => $report]))->assertOk()->assertDownload();
+
+    Http::assertSent(fn ($request): bool => str_contains($request->url(), "/finance/export/{$report}"));
+})->with(['excise-duty', 'excise-duty-charges', 'excise-duty-returns', 'excise-duty-remittances', 'disputes']);
+
+it('fills the remittance from an outstanding return', function (): void {
+    $this->actingAs($this->admin);
+
+    Livewire::test(ExciseRemittancesReport::class)
+        ->mountAction('recordRemittance')
+        ->fillForm(['month' => '2026-08'])
+        ->assertActionDataSet(['period_start' => '2026-08-01', 'period_end' => '2026-08-31', 'amount_paid' => 3]);
+});
+
+it('records a KRA remittance with an idempotency key and shows it straight away', function (): void {
+    $remitted = false;
+
+    fakeFinanceApi([
+        '*/finance/excise-duty/remittances' => function ($request) use (&$remitted) {
+            if ($request->method() !== 'POST') {
+                return null;
+            }
+
+            $remitted = true;
+
+            return Http::response(['success' => true, 'data' => ['id' => 8, 'charges' => 1, 'amount_due' => 3, 'amount_paid' => 3, 'status' => 'active']], 201);
+        },
+        '*/finance/excise-duty/remittances?*' => function () use (&$remitted) {
+            return Http::response(['success' => true, 'data' => ['items' => $remitted ? [['id' => 8, 'kra_reference' => 'KRA-NEW-777', 'status' => 'active']] : []]]);
+        },
+    ]);
+    $this->actingAs($this->admin);
+
+    Livewire::test(ExciseRemittancesReport::class)
+        ->assertDontSee('KRA-NEW-777')
+        ->callAction('recordRemittance', data: [
+            'period_start' => '2026-08-01',
+            'period_end' => '2026-08-31',
+            'amount_paid' => 3,
+            'kra_reference' => 'KRA-NEW-777',
+            'paid_at' => '2026-09-18',
+        ])
+        ->assertHasNoActionErrors()
+        ->assertNotified(Notification::make()->title('Remittance recorded')->body('1 charges attached · due KES 3.00 · paid KES 3.00.')->success())
+        ->assertSee('KRA-NEW-777');
+
+    Http::assertSent(fn ($request): bool => $request->method() === 'POST'
+        && str_ends_with($request->url(), '/finance/excise-duty/remittances')
+        && $request['period_start'] === '2026-08-01'
+        && $request['period_end'] === '2026-08-31'
+        && (float) $request['amount_paid'] === 3.0
+        && $request['kra_reference'] === 'KRA-NEW-777'
+        && $request['paid_at'] === '2026-09-18'
+        && Str::isUuid($request->header('Idempotency-Key')[0] ?? ''));
+});
+
+it('shows the API message when a remittance is refused', function (): void {
+    fakeFinanceApi([
+        '*/finance/excise-duty/remittances' => fn ($request) => $request->method() === 'POST'
+            ? Http::response(['success' => false, 'message' => 'There is no unremitted excise duty in this period.'], 422)
+            : null,
+    ]);
+    $this->actingAs($this->admin);
+
+    Livewire::test(ExciseRemittancesReport::class)
+        ->callAction('recordRemittance', data: ['period_start' => '2026-06-01', 'period_end' => '2026-06-30', 'amount_paid' => 10, 'kra_reference' => 'KRA-X'])
+        ->assertNotified(Notification::make()->title('Could not record the remittance')->body('There is no unremitted excise duty in this period.')->danger());
+});
+
+it('requires the period, amount and KRA reference before recording', function (): void {
+    $this->actingAs($this->admin);
+
+    Livewire::test(ExciseRemittancesReport::class)
+        ->callAction('recordRemittance', data: ['period_start' => null, 'period_end' => null, 'amount_paid' => 0, 'kra_reference' => ''])
+        ->assertHasActionErrors(['period_start' => 'required', 'period_end' => 'required', 'amount_paid' => 'min', 'kra_reference' => 'required']);
+
+    Http::assertNotSent(fn ($request): bool => $request->method() === 'POST');
+});
+
+it('voids a remittance with a reason', function (): void {
+    fakeFinanceApi([
+        '*/finance/excise-duty/remittances/*/void' => Http::response(['success' => true, 'data' => ['id' => 7, 'status' => 'voided']]),
+    ]);
+    $this->actingAs($this->admin);
+
+    Livewire::test(ExciseRemittancesReport::class)
+        ->callAction(TestAction::make('void')->table('7'), data: ['reason' => 'Recorded against the wrong month'])
+        ->assertHasNoActionErrors()
+        ->assertNotified('Remittance voided');
+
+    Http::assertSent(fn ($request): bool => $request->method() === 'POST'
+        && str_ends_with($request->url(), '/void')
+        && $request['reason'] === 'Recorded against the wrong month'
+        && Str::isUuid($request->header('Idempotency-Key')[0] ?? ''));
+});
+
+it('requires a reason to void a remittance', function (): void {
+    $this->actingAs($this->admin);
+
+    Livewire::test(ExciseRemittancesReport::class)
+        ->callAction(TestAction::make('void')->table('7'), data: ['reason' => ''])
+        ->assertHasActionErrors(['reason' => 'required']);
+
+    Http::assertNotSent(fn ($request): bool => $request->method() === 'POST');
+});
+
+it('reports a remittance that was already voided', function (): void {
+    fakeFinanceApi([
+        '*/finance/excise-duty/remittances/*/void' => Http::response(['success' => false, 'message' => 'Remittance is already voided.'], 409),
+    ]);
+    $this->actingAs($this->admin);
+
+    Livewire::test(ExciseRemittancesReport::class)
+        ->callAction(TestAction::make('void')->table('7'), data: ['reason' => 'Duplicate entry'])
+        ->assertNotified(Notification::make()->title('Remittance already changed')->body('Remittance is already voided.')->warning());
+});
+
+it('hides remittance writes from admins without the remit permission', function (): void {
+    Role::findByName('super-admin')->revokePermissionTo('excise-duty.remit');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+    $this->actingAs($this->admin->fresh());
+
+    Livewire::test(ExciseRemittancesReport::class)
+        ->assertActionHidden('recordRemittance')
+        ->assertActionHidden(TestAction::make('void')->table('7'));
+});
+
+it('opens the complaint from a disputes row', function (): void {
+    $this->actingAs($this->admin);
+
+    Livewire::test(DisputesReport::class)
+        ->assertSee(ComplaintDetailPage::getUrl(['complaint' => 3]), escape: false);
 });

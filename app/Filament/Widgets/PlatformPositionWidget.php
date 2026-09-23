@@ -54,7 +54,10 @@ class PlatformPositionWidget extends BaseWidget
                 ->url(BalanceSheetReport::canAccess() ? BalanceSheetReport::getUrl() : null),
 
             Stat::make('Owed to Players', Format::compactMoney($liabilities['total'] ?? 0))
-                ->description('Wallets '.Format::compactMoney($liabilities['customer_wallets'] ?? 0).' · Escrow '.Format::compactMoney(($liabilities['game_escrow'] ?? 0) + ($liabilities['competition_escrow'] ?? 0)))
+                ->description('Wallets '.Format::compactMoney($liabilities['customer_wallets'] ?? 0)
+                    .' · Escrow '.Format::compactMoney(($liabilities['game_escrow'] ?? 0) + ($liabilities['competition_escrow'] ?? 0))
+                    .' · Excise '.Format::compactMoney($liabilities['excise_duty_payable'] ?? 0)
+                    .' · Disputes '.Format::compactMoney($liabilities['disputed_funds'] ?? 0))
                 ->descriptionIcon('heroicon-m-user-group')
                 ->color($error ? 'gray' : 'info'),
 

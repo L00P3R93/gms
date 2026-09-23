@@ -19,6 +19,8 @@ class RoleSeeder extends Seeder
             'account.view',
             'account.edit',
             'account.wallet.edit',
+            'complaints.view',
+            'complaints.close',
 
             // Shareholders
             'holders.view',
@@ -60,6 +62,7 @@ class RoleSeeder extends Seeder
 
             // Reports
             'reports.view',
+            'excise-duty.remit',
 
             // Access Management
             'users.view',
@@ -87,6 +90,7 @@ class RoleSeeder extends Seeder
 
         $managerPermissions = [
             'accounts.view', 'accounts.ban', 'account.view', 'account.edit', 'account.wallet.edit',
+            'complaints.view',
             'holders.view', 'holders.create', 'holders.edit',
             'dependants.view', 'dependants.create', 'dependants.edit',
             'withdrawals.view',

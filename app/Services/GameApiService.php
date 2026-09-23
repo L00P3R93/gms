@@ -853,7 +853,13 @@ class GameApiService
     public const FINANCE_EXPORTS = [
         'ledger', 'deposits', 'withdrawals', 'purchases', 'adjustments', 'games', 'competitions',
         'customers-top', 'cash-flow', 'income-statement', 'trial-balance', 'expenses', 'taxes',
+        'excise-duty', 'excise-duty-charges', 'excise-duty-returns', 'excise-duty-remittances', 'disputes',
     ];
+
+    /**
+     * Bumped after every finance write so cached reports are refetched instead of served stale.
+     */
+    protected const FINANCE_CACHE_VERSION_KEY = 'game_api:finance:version';
 
     /**
      * Fetch one finance report and return its `data` payload.
@@ -881,7 +887,58 @@ class GameApiService
             return $fetch();
         }
 
-        return Cache::remember('game_api:finance:'.md5($path.json_encode($query)), $cacheSeconds, $fetch);
+        $version = (int) Cache::get(self::FINANCE_CACHE_VERSION_KEY, 0);
+
+        return Cache::remember('game_api:finance:'.$version.':'.md5($path.json_encode($query)), $cacheSeconds, $fetch);
+    }
+
+    /**
+     * Make every cached finance report stale, e.g. after a remittance is recorded or voided.
+     */
+    public function forgetFinanceReports(): void
+    {
+        Cache::forever(self::FINANCE_CACHE_VERSION_KEY, (int) Cache::get(self::FINANCE_CACHE_VERSION_KEY, 0) + 1);
+    }
+
+    /**
+     * Record a payment of excise duty to KRA. The API attaches every unremitted charge in the
+     * period, so they can no longer be refunded.
+     *
+     * @param  array{period_start: string, period_end: string, amount_paid: float|int|string, kra_reference: string, paid_at?: ?string}  $data
+     * @return array<string, mixed> The new remittance.
+     *
+     * @throws GameApiException 422 when nothing is unremitted in the period or the KRA reference is taken
+     */
+    public function recordExciseRemittance(array $data, string $idempotencyKey): array
+    {
+        $body = collect($data)
+            ->only(['period_start', 'period_end', 'amount_paid', 'kra_reference', 'paid_at'])
+            ->reject(fn ($value): bool => $value === null || $value === '')
+            ->all();
+
+        $remittance = $this->makeRequest('POST', '/finance/excise-duty/remittances', $body, timeout: 30, idempotencyKey: $idempotencyKey)['data'] ?? [];
+
+        $this->forgetFinanceReports();
+
+        return $remittance;
+    }
+
+    /**
+     * Void a KRA remittance; its charges are detached and owed again.
+     *
+     * @return array<string, mixed> The voided remittance.
+     *
+     * @throws GameApiException 404 when not found, 409 when already voided
+     */
+    public function voidExciseRemittance(int $remittanceId, string $reason, string $idempotencyKey): array
+    {
+        $enc = $this->encryptId($remittanceId);
+
+        $remittance = $this->makeRequest('POST', "/finance/excise-duty/remittances/{$enc}/void", ['reason' => $reason], timeout: 30, idempotencyKey: $idempotencyKey)['data'] ?? [];
+
+        $this->forgetFinanceReports();
+
+        return $remittance;
     }
 
     /**
@@ -982,6 +1039,90 @@ class GameApiService
         }
 
         return ['body' => $response->body(), 'filename' => $filename];
+    }
+
+    // -------------------------------------------------------------------------
+    // Complaints — GET/POST /complaints (closing uses the `write` limiter: 30/min)
+    // -------------------------------------------------------------------------
+
+    /**
+     * The endpoints that close a pending complaint, keyed by the status each one leaves behind.
+     *
+     * @var array<string, string>
+     */
+    public const COMPLAINT_OUTCOMES = [
+        'resolve' => 'resolved',
+        'reject' => 'rejected',
+        'cancel' => 'cancelled',
+    ];
+
+    /**
+     * One page of complaints, newest first, as the raw `{data, links, meta}` payload.
+     *
+     * @param  array<string, mixed>  $filters  status, subject_type, customer_id, game_wallet_id, competition_wallet_id, from, to, page, per_page
+     * @return array<string, mixed>
+     */
+    public function listComplaints(array $filters = []): array
+    {
+        $query = collect($filters)
+            ->reject(fn ($value): bool => $value === null || $value === '')
+            ->all();
+
+        return $this->makeRequest('GET', '/complaints', query: $query, timeout: 20);
+    }
+
+    /**
+     * A single complaint with its disputed transactions and refunds.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws GameApiException 404 when the complaint does not exist
+     */
+    public function getComplaint(int $complaintId): array
+    {
+        $enc = $this->encryptId($complaintId);
+
+        return $this->makeRequest('GET', "/complaints/{$enc}")['data'] ?? [];
+    }
+
+    /**
+     * Close a pending complaint by resolving, rejecting or cancelling it. The caller owns the
+     * Idempotency-Key so a retry of the same attempt replays instead of acting twice.
+     *
+     * @return array<string, mixed> The updated complaint.
+     *
+     * @throws GameApiException 409 when already closed, 422 on validation or a missing round
+     */
+    public function closeComplaint(int $complaintId, string $outcome, string $note, string $idempotencyKey): array
+    {
+        if (! array_key_exists($outcome, self::COMPLAINT_OUTCOMES)) {
+            throw new GameApiException("Unsupported complaint outcome: {$outcome}", 422, 'Unsupported outcome');
+        }
+
+        $enc = $this->encryptId($complaintId);
+
+        $complaint = $this->makeRequest('POST', "/complaints/{$enc}/{$outcome}", ['note' => $note], timeout: 30, idempotencyKey: $idempotencyKey)['data'] ?? [];
+
+        // Closing moves money out of dispute escrow, so held totals in finance reports change.
+        $this->forgetFinanceReports();
+
+        return $complaint;
+    }
+
+    /**
+     * Pending dispute totals from GET /finance/disputes, including `currently_held` escrow.
+     * Spans the widest range the finance API accepts (366 days) so older open disputes count.
+     *
+     * @return array<string, mixed>
+     */
+    public function getDisputesSummary(): array
+    {
+        return $this->financeReport('disputes', [
+            'status' => 'pending_dispute',
+            'from' => today()->subDays(365)->toDateString(),
+            'to' => today()->toDateString(),
+            'per_page' => 1,
+        ])['summary'] ?? [];
     }
 
     // -------------------------------------------------------------------------
