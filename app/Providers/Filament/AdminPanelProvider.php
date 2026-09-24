@@ -76,6 +76,7 @@ class AdminPanelProvider extends PanelProvider
             ->navigationGroups([
                 NavigationGroup::make('💸 Expenses & Payouts'),
                 NavigationGroup::make('🎮 Players'),
+                NavigationGroup::make('🎁 Referrals'),
                 NavigationGroup::make('🎯 Game Results'),
                 NavigationGroup::make('🤝 Shareholders'),
                 NavigationGroup::make('📈 Reports'),
