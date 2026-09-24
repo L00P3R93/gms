@@ -3,16 +3,23 @@
 namespace App\Console\Commands;
 
 use App\Exceptions\MpesaApiException;
-use App\Models\MpesaAccountBalance;
 use App\Services\MpesaService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Asks Safaricom for the B2C shortcode's account balance. The request is only
+ * acknowledged here; Safaricom posts the balance to B2CBalanceResultController,
+ * which updates the single `b2c` row in mpesa_account_balances.
+ *
+ * C2B is not fetched: MPESA_C2B_SHORTCODE is the same shortcode as B2C, so it
+ * returned the same accounts twice.
+ */
 class FetchMpesaBalances extends Command
 {
     protected $signature = 'mpesa:fetch-balances';
 
-    protected $description = 'Fetch B2C and C2B account balances from Safaricom and store them';
+    protected $description = 'Request the B2C shortcode balance from Safaricom (the result arrives by callback)';
 
     public function __construct(
         private readonly MpesaService $mpesa,
@@ -22,55 +29,35 @@ class FetchMpesaBalances extends Command
 
     public function handle(): int
     {
-        $this->info('Fetching M-Pesa account balances...');
+        $this->info('Requesting the M-Pesa B2C account balance...');
 
-        $this->fetchBalance('b2c');
-        $this->fetchBalance('c2b');
-
-        $this->info('Done.');
-
-        return self::SUCCESS;
-    }
-
-    private function fetchBalance(string $type): void
-    {
         try {
-            $response = match ($type) {
-                'b2c' => $this->mpesa->b2cAccountBalance(),
-                'c2b' => $this->mpesa->c2bAccountBalance(),
-            };
-
-            $result = $response['Result'] ?? $response;
-
-            if (($result['ResultCode'] ?? null) != 0) {
-                Log::channel('mpesa')->error("Balance fetch failed for {$type}", [
-                    'response' => $response,
-                ]);
-                $this->error("{$type} balance fetch failed: ".($result['ResultDesc'] ?? 'Unknown error'));
-
-                return;
-            }
-
-            $balance = MpesaAccountBalance::storeFromCallback($type, $result);
-
-            if ($balance) {
-                Log::channel('mpesa')->info("{$type} balance updated", [
-                    'working' => $balance->working_account_balance,
-                    'utility' => $balance->utility_account_balance,
-                ]);
-                $this->line("  {$type}: Working KES ".number_format($balance->working_account_balance, 2).' | Utility KES '.number_format($balance->utility_account_balance, 2));
-            }
+            $response = $this->mpesa->b2cAccountBalance();
         } catch (MpesaApiException $e) {
-            Log::channel('mpesa')->error("{$type} balance fetch API error", [
+            Log::channel('mpesa')->error('b2c balance request API error', [
                 'message' => $e->getMessage(),
                 'status' => $e->statusCode,
             ]);
-            $this->error("{$type} API error: {$e->getMessage()}");
+            $this->error("b2c API error: {$e->getMessage()}");
+
+            return self::FAILURE;
         } catch (\Throwable $e) {
-            Log::channel('mpesa')->error("{$type} balance fetch error", [
-                'message' => $e->getMessage(),
-            ]);
-            $this->error("{$type} error: {$e->getMessage()}");
+            Log::channel('mpesa')->error('b2c balance request error', ['message' => $e->getMessage()]);
+            $this->error("b2c error: {$e->getMessage()}");
+
+            return self::FAILURE;
         }
+
+        if ((string) ($response['ResponseCode'] ?? '') !== '0') {
+            Log::channel('mpesa')->error('b2c balance request rejected', ['response' => $response]);
+            $this->error('b2c balance request rejected: '.($response['ResponseDescription'] ?? $response['errorMessage'] ?? 'Unknown error'));
+
+            return self::FAILURE;
+        }
+
+        Log::channel('mpesa')->info('b2c balance requested', ['conversation_id' => $response['ConversationID'] ?? null]);
+        $this->line('  b2c: requested, the balance arrives by callback.');
+
+        return self::SUCCESS;
     }
 }

@@ -1,21 +1,30 @@
 <?php
 
+use App\Enums\CompanyWithdrawStatus;
+use App\Enums\PayoutStatus;
 use App\Enums\UserStatus;
+use App\Enums\WithdrawStatus;
+use App\Enums\WithdrawType;
 use App\Filament\Pages\ReferralWithdrawalsPage;
 use App\Filament\Widgets\ReferralFinanceWidget;
 use App\Filament\Widgets\ReferralProgrammeWidget;
 use App\Filament\Widgets\ReferralReconciliationWidget;
 use App\Filament\Widgets\TopReferrersWidget;
+use App\Models\CompanyWithdraw;
+use App\Models\MpesaAccountBalance;
+use App\Models\Payee;
+use App\Models\Payout;
 use App\Models\User;
+use App\Models\Withdraw;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
 /**
- * @param  list<array<string, mixed>>  $cashAccounts
+ * @param  array<string, mixed>  $stubs
  */
-function fakeReferralDashboardApi(array $cashAccounts = [], array $stubs = []): void
+function fakeReferralDashboardApi(array $stubs = []): void
 {
     Http::preventStrayRequests();
 
@@ -31,9 +40,6 @@ function fakeReferralDashboardApi(array $cashAccounts = [], array $stubs = []): 
             'bonuses_earned' => ['signup' => 90.0, 'first_deposit' => 60.0, 'total' => 150.0, 'count' => 15],
             'payouts' => ['paid' => 100.0, 'pending' => 50.0, 'failed' => 0.0],
             'position' => ['unspent_balances' => 800.0, 'open_withdrawals' => ['count' => 1, 'amount' => 50.0], 'lifetime_bonuses' => 1500.0, 'lifetime_paid_out' => 650.0],
-        ]]),
-        '*/finance/balance-sheet*' => Http::response(['success' => true, 'data' => [
-            'assets' => ['cash' => ['accounts' => $cashAccounts]],
         ]]),
         '*/finance/reconciliation*' => Http::response(['success' => true, 'data' => [
             'status' => 'warn',
@@ -89,51 +95,78 @@ it('lists the top referrers with links to their customer pages', function (): vo
         ->assertSee(ReferralWithdrawalsPage::customerUrl(42));
 });
 
+/**
+ * Store the B2C shortcode's balance the way the Safaricom balance callback does.
+ */
+function storeB2cBalance(float $utility): MpesaAccountBalance
+{
+    return MpesaAccountBalance::storeFromCallback('b2c', [
+        'ResultParameters' => ['ResultParameter' => [
+            ['Key' => 'AccountBalance', 'Value' => "Working Account|KES|0.00|0.00|0.00|0.00&Utility Account|KES|{$utility}|{$utility}|0.00|0.00"],
+        ]],
+    ]);
+}
+
+function makeCommittedPayout(float $amount, PayoutStatus $status): Payout
+{
+    $payee = Payee::create(['name' => 'Ops Vendor', 'phone' => '254700000000', 'designation' => 'Vendor', 'team' => 'Ops']);
+
+    return Payout::create(['payee_id' => $payee->id, 'amount' => $amount, 'reason' => 'Hosting', 'status' => $status]);
+}
+
 it('shows referral bonuses and payouts for the current month', function (): void {
     $this->travelTo('2026-09-24 12:00:00');
-    fakeReferralDashboardApi([['type' => 'referral_b2c', 'account' => 'Utility Account', 'amount' => 5000.0]]);
+    fakeReferralDashboardApi();
+    storeB2cBalance(5000);
     $this->actingAs($this->admin);
 
     Livewire::test(ReferralFinanceWidget::class)
         ->assertSee('KES 150.00')
         ->assertSee('Pending KES 50.00')
-        ->assertSee('Covers unspent balances of KES 800.00');
+        ->assertSee('Covers referral balances KES 800.00 + GMS payouts KES 0.00');
 
     Http::assertSent(function (Request $request): bool {
         parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
 
         return str_contains($request->url(), '/finance/referrals?') && $query === ['from' => '2026-09-01', 'to' => '2026-09-24'];
     });
+    Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), '/finance/balance-sheet'));
 });
 
-it('warns when the referral shortcode holds less than the unspent balances', function (): void {
-    fakeReferralDashboardApi([['type' => 'referral_b2c', 'account' => 'Utility Account', 'amount' => 500.0]]);
+it('warns when the B2C balance cannot cover referral balances plus committed GMS payouts', function (): void {
+    fakeReferralDashboardApi();
+    storeB2cBalance(1000);
+    makeCommittedPayout(300, PayoutStatus::Approved);
+    makeCommittedPayout(200, PayoutStatus::Processing);
+    makeCommittedPayout(5000, PayoutStatus::Pending);
+    makeCommittedPayout(7000, PayoutStatus::Completed);
+    CompanyWithdraw::create(['phone' => '254700000001', 'amount' => 100, 'user_id' => $this->admin->id, 'reason' => 'Ops', 'status' => CompanyWithdrawStatus::Processing->value]);
+    Withdraw::create(['receiver_id' => 1, 'type' => WithdrawType::Holder->value, 'phone' => '254700000003', 'amount' => 50, 'status' => WithdrawStatus::Processing->value]);
     $this->actingAs($this->admin);
 
     Livewire::test(ReferralFinanceWidget::class)
-        ->assertSee('KES 500.00')
-        ->assertSee('Short by KES 300.00 against unspent balances — payouts will start failing');
+        ->assertSee('KES 1,000.00')
+        ->assertSee('Short by KES 450.00 against referral balances KES 800.00 + GMS payouts KES 650.00 — payouts will start failing');
 });
 
-it('says when the referral shortcode balance has not been fetched', function (): void {
-    fakeReferralDashboardApi([['type' => 'b2c', 'account' => 'Utility Account', 'amount' => 9000.0]]);
+it('flags a B2C balance older than two hours as stale', function (): void {
+    fakeReferralDashboardApi();
+    $this->travelTo('2026-09-24 09:00:00');
+    storeB2cBalance(5000);
+    $this->travelTo('2026-09-24 12:00:00');
+    $this->actingAs($this->admin);
+
+    Livewire::test(ReferralFinanceWidget::class)
+        ->assertSee('updated 3 hours ago');
+});
+
+it('says when no B2C balance has been fetched yet', function (): void {
+    fakeReferralDashboardApi();
     $this->actingAs($this->admin);
 
     Livewire::test(ReferralFinanceWidget::class)
         ->assertSee('Not fetched');
 });
-
-it('reads the referral shortcode balance from its utility account', function (array $accounts, ?float $balance): void {
-    expect(ReferralFinanceWidget::referralShortcodeBalance($accounts))->toBe($balance);
-})->with([
-    'utility and working accounts' => [[
-        ['type' => 'referral_b2c', 'account' => 'Working Account', 'amount' => 100.0],
-        ['type' => 'referral_b2c', 'account' => 'Utility Account', 'amount' => 700.0],
-        ['type' => 'b2c', 'account' => 'Utility Account', 'amount' => 9000.0],
-    ], 700.0],
-    'one unnamed account' => [[['type' => 'referral_b2c', 'account' => 'Organization', 'amount' => 250.0]], 250.0],
-    'none' => [[['type' => 'b2c', 'account' => 'Utility Account', 'amount' => 9000.0]], null],
-]);
 
 it('shows only the referral reconciliation checks and links stuck withdrawals to the list', function (): void {
     fakeReferralDashboardApi();

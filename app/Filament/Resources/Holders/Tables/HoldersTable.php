@@ -84,9 +84,10 @@ class HoldersTable
                     ->form([
                         TextInput::make('amount')
                             ->label('Amount (KES)')
-                            ->numeric()
+                            ->integer()
                             ->required()
                             ->minValue(1)
+                            ->helperText('M-Pesa pays whole shillings only.')
                             ->prefix('KES'),
                     ])
                     ->action(function (Holder $record, array $data): void {
@@ -112,11 +113,12 @@ class HoldersTable
                         ]);
 
                         try {
-                            $response = app(MpesaService::class)->b2c(
-                                $record->phone,
-                                $data['amount'],
-                                'Shareholder Payout'
-                            );
+                            $response = app(MpesaService::class)->b2c([
+                                'Amount' => (int) $data['amount'],
+                                'PartyB' => $record->phone,
+                                'Remarks' => 'Shareholder Payout',
+                                'Occasion' => '',
+                            ]);
 
                             $conversationId = $response['ConversationID'] ?? null;
 
