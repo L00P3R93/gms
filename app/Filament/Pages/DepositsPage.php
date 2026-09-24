@@ -299,7 +299,7 @@ class DepositsPage extends FinanceListReportPage
             'resolution_action' => isset($resolution['action']) ? ucfirst((string) $resolution['action']) : null,
             'resolution_reference' => $resolution['mpesa_reference'] ?? null,
             'resolution_note' => $resolution['note'] ?? null,
-            'resolution_by' => is_array($resolution['resolved_by'] ?? null) ? ($resolution['resolved_by']['name'] ?? null) : ($resolution['resolved_by'] ?? null),
+            'resolution_by' => UnmatchedDepositsPage::resolvedBy($resolution['resolved_by'] ?? null),
             'resolution_at' => isset($resolution['resolved_at']) ? Format::dateTime($resolution['resolved_at']) : null,
         ];
     }

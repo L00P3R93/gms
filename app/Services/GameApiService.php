@@ -13,6 +13,8 @@ use Illuminate\Support\Str;
 
 class GameApiService
 {
+    public const UNMATCHED_SUMMARY_CACHE_KEY = 'game_api:deposits:unmatched:summary';
+
     protected string $baseUrl;
 
     protected string $apiKey;
@@ -741,6 +743,42 @@ class GameApiService
         $enc = $this->encryptId((string) $depositId);
 
         return $this->makeRequest('GET', "/deposits/{$enc}")['data'] ?? [];
+    }
+
+    /**
+     * One page of the unmatched-deposit work queue: `summary`, `items` (each with
+     * `suggestions` and, once resolved, `resolution`) and `pagination`.
+     * Endpoint: GET /api/v1/deposits/unmatched  (rate limited: 20/min)
+     *
+     * @param  array<string, mixed>  $filters  status (unmatched|assigned|refunded), from, to, page, per_page
+     * @return array<string, mixed>
+     */
+    public function listUnmatchedDeposits(array $filters = []): array
+    {
+        $query = collect($filters)
+            ->reject(fn ($value): bool => $value === null || $value === '')
+            ->all();
+
+        return $this->makeRequest('GET', '/deposits/unmatched', query: $query, timeout: 20)['data'] ?? [];
+    }
+
+    /**
+     * The unmatched count and amount for the dashboard, cached for a minute because
+     * the endpoint shares the 20/min `stats` limiter with the finance reports.
+     *
+     * @return array{unmatched_count?: int, unmatched_amount?: float}
+     */
+    public function getUnmatchedDepositsSummary(): array
+    {
+        return Cache::remember(self::UNMATCHED_SUMMARY_CACHE_KEY, 60, fn (): array => $this->listUnmatchedDeposits(['status' => 'unmatched', 'per_page' => 1])['summary'] ?? []);
+    }
+
+    /**
+     * Drop the cached unmatched summary after a deposit is assigned, refunded or matched.
+     */
+    public function forgetUnmatchedDepositsSummary(): void
+    {
+        Cache::forget(self::UNMATCHED_SUMMARY_CACHE_KEY);
     }
 
     /**

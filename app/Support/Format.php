@@ -71,6 +71,15 @@ class Format
         return $phone === '' ? '—' : '****'.substr($phone, -4);
     }
 
+    /**
+     * Parse an API date into the app (Nairobi) timezone, or null when empty/invalid.
+     * M-Pesa's raw `YmdHis` TransTime is Nairobi local time.
+     */
+    public static function toCarbon(int|string|null $value): ?Carbon
+    {
+        return self::carbon($value);
+    }
+
     protected static function carbon(int|string|null $value): ?Carbon
     {
         if ($value === null || $value === '' || $value === 0) {
@@ -78,6 +87,10 @@ class Format
         }
 
         try {
+            if (preg_match('/^\d{14}$/', (string) $value)) {
+                return Carbon::createFromFormat('YmdHis', (string) $value, config('app.timezone'));
+            }
+
             // KadiApi may send UTC or +03:00; always show Nairobi (the app timezone).
             return Carbon::parse($value)->setTimezone(config('app.timezone'));
         } catch (\Throwable) {
