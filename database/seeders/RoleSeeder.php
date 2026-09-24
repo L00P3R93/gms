@@ -22,6 +22,7 @@ class RoleSeeder extends Seeder
             'complaints.view',
             'complaints.close',
             'referral-withdrawals.settle',
+            'referral-codes.edit',
 
             // Shareholders
             'holders.view',

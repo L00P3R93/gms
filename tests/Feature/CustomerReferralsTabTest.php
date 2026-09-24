@@ -8,10 +8,13 @@ use App\Livewire\CustomerReferralBonusesTable;
 use App\Livewire\CustomerReferralsTable;
 use App\Livewire\CustomerReferralSummary;
 use App\Livewire\CustomerReferralWithdrawalsTable;
+use App\Models\AuditLog;
 use App\Models\User;
 use App\Services\GameApiService;
+use App\Support\ReferralCode;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 
 const REFERRAL_QR_DATA_URI = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
@@ -77,6 +80,9 @@ beforeEach(function (): void {
 
     $this->manager = User::factory()->create(['status' => UserStatus::Active->value]);
     $this->manager->assignRole('manager');
+
+    $this->admin = User::factory()->create(['status' => UserStatus::Active->value]);
+    $this->admin->assignRole('admin');
 });
 
 it('adds a Referrals tab to the customer page without fetching referral data up front', function (): void {
@@ -187,4 +193,118 @@ it('shows an error state in a referral table when KadiApi is down', function ():
 
     Livewire::test(CustomerReferralWithdrawalsTable::class, ['customerId' => 42])
         ->assertSee('Could not be loaded from KadiApi');
+});
+
+it('changes the referral code and rebuilds the link and QR code', function (): void {
+    fakeCustomerReferralsApi([
+        '*game-api.test/customers/*/referral-code' => function (Request $request) {
+            return $request->method() === 'PUT'
+                ? Http::response(['success' => true, 'data' => ['customer_id' => 42, 'code' => 'JANE2026', 'link' => $request['link'], 'qr_code' => $request['qr_code']]])
+                : Http::response(['success' => true, 'data' => ['customer_id' => 42, 'code' => '7WMK98TW', 'link' => 'https://kadi.online/register?ref=7WMK98TW', 'qr_code' => REFERRAL_QR_DATA_URI]]);
+        },
+    ]);
+    $this->actingAs($this->admin);
+
+    Livewire::test(CustomerReferralSummary::class, ['customerId' => 42])
+        ->callAction('changeReferralCode', data: ['code' => 'jane2026'])
+        ->assertHasNoActionErrors()
+        ->assertNotified('Referral code saved')
+        ->assertSee('JANE2026')
+        ->assertSee('https://kadi.online/register?ref=JANE2026');
+
+    Http::assertSent(function (Request $request): bool {
+        if ($request->method() !== 'PUT') {
+            return false;
+        }
+
+        $png = base64_decode(Str::after($request['qr_code'], 'data:image/png;base64,'), true);
+
+        return $request['code'] === 'JANE2026'
+            && $request['link'] === 'https://kadi.online/register?ref=JANE2026'
+            && str_starts_with($request['qr_code'], 'data:image/png;base64,')
+            && $png !== false && str_starts_with($png, "\x89PNG")
+            && Str::isUuid($request->header('Idempotency-Key')[0] ?? '');
+    });
+
+    $log = AuditLog::query()->where('auditable_type', 'KadiApi\ReferralCode')->sole();
+    expect($log->user_id)->toBe($this->admin->id)
+        ->and($log->auditable_id)->toBe(42)
+        ->and($log->event)->toBe('updated')
+        ->and($log->new_values['payload']['code'])->toBe('JANE2026')
+        ->and($log->new_values['status'])->toBe(200);
+});
+
+it('builds the referral link from the configured format', function (): void {
+    config(['services.game_api.referral_link' => 'https://kadi.test/join/{code}']);
+
+    expect(ReferralCode::link('abcd12'))->toBe('https://kadi.test/join/ABCD12');
+});
+
+it('rejects a code that is not 4 to 20 letters or digits before calling KadiApi', function (string $code): void {
+    fakeCustomerReferralsApi();
+    $this->actingAs($this->admin);
+
+    Livewire::test(CustomerReferralSummary::class, ['customerId' => 42])
+        ->callAction('changeReferralCode', data: ['code' => $code])
+        ->assertHasActionErrors(['code' => 'regex']);
+
+    Http::assertNotSent(fn (Request $request): bool => $request->method() === 'PUT');
+})->with([
+    'too short' => ['AB1'],
+    'too long' => ['ABCDEFGHIJ0123456789X'],
+    'symbols' => ['JANE-2026'],
+]);
+
+it('puts a taken code on the form and retries with a new idempotency key', function (): void {
+    $puts = 0;
+
+    fakeCustomerReferralsApi([
+        '*game-api.test/customers/*/referral-code' => function (Request $request) use (&$puts) {
+            if ($request->method() !== 'PUT') {
+                return Http::response(['success' => true, 'data' => ['customer_id' => 42, 'code' => '7WMK98TW', 'link' => null, 'qr_code' => null]]);
+            }
+
+            return ++$puts === 1
+                ? Http::response(['success' => false, 'message' => 'Referral code is already taken'], 409)
+                : Http::response(['success' => true, 'data' => ['customer_id' => 42, 'code' => 'JANE2027']]);
+        },
+    ]);
+    $this->actingAs($this->admin);
+
+    Livewire::test(CustomerReferralSummary::class, ['customerId' => 42])
+        ->mountAction('changeReferralCode')
+        ->fillForm(['code' => 'JANE2026'])
+        ->callMountedAction()
+        ->assertHasActionErrors(['code' => 'Referral code is already taken'])
+        ->fillForm(['code' => 'JANE2027'])
+        ->callMountedAction()
+        ->assertNotified('Referral code saved');
+
+    $keys = Http::recorded(fn (Request $request): bool => $request->method() === 'PUT')
+        ->map(fn (array $pair): string => $pair[0]->header('Idempotency-Key')[0])
+        ->unique();
+
+    expect($keys)->toHaveCount(2);
+});
+
+it('maps KadiApi validation errors onto the code field', function (): void {
+    fakeCustomerReferralsApi([
+        '*game-api.test/customers/*/referral-code' => fn (Request $request) => $request->method() === 'PUT'
+            ? Http::response(['message' => 'Validation failed', 'errors' => ['code' => ['The code must be 4 to 20 letters or digits.']]], 422)
+            : Http::response(['success' => true, 'data' => ['customer_id' => 42, 'code' => '7WMK98TW']]),
+    ]);
+    $this->actingAs($this->admin);
+
+    Livewire::test(CustomerReferralSummary::class, ['customerId' => 42])
+        ->callAction('changeReferralCode', data: ['code' => 'JANE2026'])
+        ->assertHasActionErrors(['code' => 'The code must be 4 to 20 letters or digits.']);
+});
+
+it('hides the change code action from users without the permission', function (): void {
+    fakeCustomerReferralsApi();
+    $this->actingAs($this->manager);
+
+    Livewire::test(CustomerReferralSummary::class, ['customerId' => 42])
+        ->assertSee('7WMK98TW')
+        ->assertActionHidden('changeReferralCode');
 });

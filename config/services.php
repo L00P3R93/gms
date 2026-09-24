@@ -41,6 +41,8 @@ return [
         'openssl_key' => env('GAME_API_OPENSSL_KEY'),
         'openssl_method' => env('GAME_API_OPENSSL_METHOD', 'AES-128-CBC'),
         'image_url' => env('KADI_IMAGE_URL', 'https://gameapi.kadi.online/kadi/images'),
+        // The player app's referral link; {code} is replaced with the upper-case code.
+        'referral_link' => env('KADI_REFERRAL_LINK', 'https://kadi.online/register?ref={code}'),
     ],
 
     'brevo' => [
