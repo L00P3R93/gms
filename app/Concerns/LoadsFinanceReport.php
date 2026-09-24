@@ -17,10 +17,10 @@ trait LoadsFinanceReport
      * @param  array<string, mixed>  $filters
      * @return array<string, mixed>
      */
-    protected function loadFinanceReport(string $report, array $filters = []): array
+    protected function loadFinanceReport(string $report, array $filters = [], int $cacheSeconds = 120): array
     {
         try {
-            return app(GameApiService::class)->financeReport($report, $filters);
+            return app(GameApiService::class)->financeReport($report, $filters, $cacheSeconds);
         } catch (\Throwable $e) {
             Log::warning('Dashboard finance report failed', ['report' => $report, 'error' => $e->getMessage()]);
             $this->financeApiError = true;

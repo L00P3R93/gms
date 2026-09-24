@@ -111,6 +111,7 @@ it('orders dashboard widgets in contiguous groups of related widgets', function 
         'activity' => ['StatsOverview', 'GameStatsWidget', 'PlayerEngagementWidget', 'PlayerRegistrationTrendWidget', 'AgentStatsWidget'],
         'income' => ['IncomeStatsOverviewWidget', 'FinanceOverviewWidget', 'RevenueChartWidget', 'StakesVersusPayoutsChartWidget', 'PurchasesStatsOverviewWidget'],
         'cash' => ['MpesaBalanceStatsWidget', 'PlatformPositionWidget', 'ComplaintsStatsWidget', 'ExciseDutyWidget'],
+        'referrals' => ['ReferralProgrammeWidget', 'TopReferrersWidget', 'ReferralFinanceWidget', 'ReferralReconciliationWidget'],
         'payouts' => ['WithdrawalsThisMonthWidget', 'ShareholdersTableWidget', 'ShareDistributionChartWidget'],
         'players' => ['TopCustomersWidget'],
     ];

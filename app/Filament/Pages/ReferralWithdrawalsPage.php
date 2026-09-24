@@ -21,6 +21,7 @@ use Filament\Tables\Table;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
+use Livewire\Attributes\Url;
 use UnitEnum;
 
 /**
@@ -61,6 +62,22 @@ class ReferralWithdrawalsPage extends Page implements HasTable
     protected string $view = 'filament.pages.referral-withdrawals-page';
 
     public bool $apiError = false;
+
+    /**
+     * Bound to the URL so the dashboard can link straight to, for example, processing withdrawals.
+     *
+     * @var array<string, mixed>|null
+     */
+    #[Url(as: 'filters')]
+    public ?array $tableFilters = null;
+
+    /**
+     * The list filtered to one status, e.g. for the reconciliation link to stuck withdrawals.
+     */
+    public static function getUrlForStatus(string $status): string
+    {
+        return static::getUrl(['filters' => ['status' => ['value' => $status]]]);
+    }
 
     /**
      * Referral data is visible to whoever can view customers.
