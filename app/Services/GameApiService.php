@@ -1132,6 +1132,21 @@ class GameApiService
     // -------------------------------------------------------------------------
 
     /**
+     * One page of referrals (who referred whom) as the raw `{data, links, meta}` payload.
+     *
+     * @param  array<string, mixed>  $filters  status, referrer_id, referred_id, from, to, page, per_page
+     * @return array<string, mixed>
+     */
+    public function listReferrals(array $filters = []): array
+    {
+        $query = collect($filters)
+            ->reject(fn ($value): bool => $value === null || $value === '')
+            ->all();
+
+        return $this->makeRequest('GET', '/referrals', query: $query, timeout: 20);
+    }
+
+    /**
      * How an admin can settle a withdrawal that M-Pesa never confirmed.
      *
      * @var list<string>
