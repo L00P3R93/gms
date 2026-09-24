@@ -281,6 +281,13 @@ class DepositsPage extends FinanceListReportPage
         $status = $deposit['status'] ?? null;
         $amount = $deposit['amount'] ?? $deposit['trans_amount'] ?? 0;
 
+        // A resolved unmatched deposit names its customer in `resolution.customer_name`.
+        $creditedTo = match (true) {
+            is_array($customer) => trim(($customer['name'] ?? 'Customer').(isset($customer['account_no']) ? ' · '.$customer['account_no'] : '')),
+            filled($customer) => $customer,
+            default => $resolution['customer_name'] ?? null,
+        };
+
         return [
             'trans_id' => $deposit['trans_id'] ?? null,
             'trans_time' => Format::dateTime($deposit['trans_time'] ?? $deposit['created_at'] ?? null),
@@ -289,10 +296,8 @@ class DepositsPage extends FinanceListReportPage
             'payer' => $deposit['name'] ?? null,
             'short_code' => isset($deposit['short_code']) ? (string) $deposit['short_code'] : null,
             'bill_ref_no' => $deposit['bill_ref_no'] ?? null,
-            'customer_id' => is_array($customer) ? ($customer['id'] ?? null) : ($deposit['customer_id'] ?? null),
-            'customer' => is_array($customer)
-                ? trim(($customer['name'] ?? 'Customer').(isset($customer['account_no']) ? ' · '.$customer['account_no'] : ''))
-                : $customer,
+            'customer_id' => is_array($customer) ? ($customer['id'] ?? null) : ($deposit['customer_id'] ?? $resolution['customer_id'] ?? null),
+            'customer' => $creditedTo,
             // Both are null when no excise was charged, so the wallet kept the full amount.
             'excise_amount' => isset($deposit['excise_amount']) ? Format::money($deposit['excise_amount']) : 'None charged',
             'net_amount' => Format::money($deposit['net_amount'] ?? $amount),

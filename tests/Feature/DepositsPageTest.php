@@ -148,6 +148,19 @@ it('opens a deposit in the documented shape with no excise charged', function ()
         ->assertMountedActionModalDontSee('Resolution');
 });
 
+it('names the customer an unmatched deposit was assigned to', function (): void {
+    fakeDepositsApi(['*/deposits/*' => Http::response(['data' => [
+        'id' => 8, 'trans_id' => 'UIKEQ8ABCD', 'trans_amount' => 1000, 'name' => 'JOHN DOE', 'status' => 2, 'customer' => null,
+        'resolution' => ['action' => 'assigned', 'customer_id' => 42, 'customer_name' => 'Wanjiru Kamau', 'note' => 'Typed her phone number', 'resolved_by' => 'api_key:3', 'resolved_at' => '2026-09-24T08:00:00Z'],
+    ]])]);
+    $this->actingAs($this->manager);
+
+    Livewire::test(DepositsPage::class)
+        ->mountAction(TestAction::make('view')->table('8'))
+        ->assertMountedActionModalSee(['Wanjiru Kamau', 'Assigned'])
+        ->assertMountedActionModalSeeHtml(AccountResource::getUrl('view', ['record' => 42]));
+});
+
 it('shows the API message when a deposit cannot be loaded', function (): void {
     fakeDepositsApi(['*/deposits/*' => Http::response(['message' => 'Deposit not found.'], 404)]);
     $this->actingAs($this->manager);

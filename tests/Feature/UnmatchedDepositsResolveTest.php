@@ -252,9 +252,8 @@ it('keeps a refund open on the reference field when the reference is already use
         ->assertHasFormErrors(['mpesa_reference' => $error])
         ->assertActionMounted(TestAction::make('refund')->table('31'));
 })->with([
-    'message only, as KadiApi sends it today' => [['message' => 'That M-Pesa reference is already on another refund'], 'That M-Pesa reference is already on another refund'],
-    'errors.mpesa_reference' => [['message' => 'Conflict', 'errors' => ['mpesa_reference' => ['Already used on deposit 12.']]], 'Already used on deposit 12.'],
-    'reference_used code' => [['message' => 'Conflict', 'code' => 'reference_used'], 'Conflict'],
+    'as KadiApi sends it' => [['success' => false, 'code' => 'reference_used', 'message' => 'That M-Pesa reference is already on another refund', 'errors' => ['mpesa_reference' => ['That M-Pesa reference is already on another refund']]], 'That M-Pesa reference is already on another refund'],
+    'code without errors' => [['success' => false, 'code' => 'reference_used', 'message' => 'Conflict'], 'Conflict'],
 ]);
 
 it('closes a refund when the deposit was already resolved', function (array $body): void {
@@ -266,9 +265,9 @@ it('closes a refund when the deposit was already resolved', function (array $bod
         ->assertNotified('Deposit already resolved')
         ->assertActionNotMounted(TestAction::make('refund')->table('31'));
 })->with([
-    'message only, as KadiApi sends it today' => [['message' => 'Only unmatched deposits can be refunded']],
-    // The code wins over wording, even if a future message mentions the reference.
-    'already_resolved code' => [['message' => 'This deposit and its reference are already resolved', 'code' => 'already_resolved']],
+    'as KadiApi sends it' => [['success' => false, 'code' => 'already_resolved', 'message' => 'Only unmatched deposits can be refunded']],
+    // The code decides, never the wording: a message mentioning the reference changes nothing.
+    'reworded message' => [['success' => false, 'code' => 'already_resolved', 'message' => 'This deposit and its reference are already resolved']],
 ]);
 
 it('hides assign and refund from support, who can still view the queue', function (): void {

@@ -830,6 +830,39 @@ class GameApiService
     }
 
     /**
+     * Assign every unmatched deposit whose bill ref now exactly matches a customer's account
+     * number (never a phone). A dry run only previews; the live call needs its own
+     * Idempotency-Key so a retry replays instead of assigning again.
+     * Endpoint: POST /api/v1/deposits/unmatched/match  (rate limited: 30/min)
+     *
+     * @return array{dry_run?: bool, matched?: int, matched_amount?: float, assigned?: int, assigned_amount?: float, items?: list<array<string, mixed>>}
+     *
+     * @throws GameApiException
+     */
+    public function matchUnmatchedDeposits(bool $dryRun, ?string $idempotencyKey = null): array
+    {
+        if (! $dryRun && $idempotencyKey === null) {
+            throw new GameApiException('A live match needs an Idempotency-Key.', 422, 'A live match needs an Idempotency-Key.');
+        }
+
+        $result = $this->makeRequest(
+            'POST',
+            '/deposits/unmatched/match',
+            ['dry_run' => $dryRun],
+            timeout: 60,
+            idempotencyKey: $idempotencyKey,
+            // A dry run changes nothing, so it is sent without a random key.
+            readOnly: $dryRun,
+        )['data'] ?? [];
+
+        if (! $dryRun) {
+            $this->forgetDepositCaches();
+        }
+
+        return $result;
+    }
+
+    /**
      * A resolved deposit changes the unmatched summary and the finance reports.
      */
     protected function forgetDepositCaches(): void
