@@ -122,6 +122,7 @@ class GameApiService
                 "Game API error {$statusCode}: {$apiMessage}",
                 $statusCode,
                 $apiMessage,
+                is_array($decoded['errors'] ?? null) ? $decoded['errors'] : [],
             );
         }
 
@@ -1123,6 +1124,78 @@ class GameApiService
             'to' => today()->toDateString(),
             'per_page' => 1,
         ])['summary'] ?? [];
+    }
+
+    // -------------------------------------------------------------------------
+    // Player referral withdrawals — paid by KadiApi from the 4151665 shortcode.
+    // Not to be confused with the agent referral codes above (getReferralStats).
+    // -------------------------------------------------------------------------
+
+    /**
+     * How an admin can settle a withdrawal that M-Pesa never confirmed.
+     *
+     * @var list<string>
+     */
+    public const REFERRAL_WITHDRAWAL_OUTCOMES = ['completed', 'failed'];
+
+    /**
+     * One page of referral withdrawals as the raw `{data, links, meta}` payload.
+     *
+     * @param  array<string, mixed>  $filters  status, customer_id, page, per_page
+     * @return array<string, mixed>
+     */
+    public function listReferralWithdrawals(array $filters = []): array
+    {
+        $query = collect($filters)
+            ->reject(fn ($value): bool => $value === null || $value === '')
+            ->all();
+
+        return $this->makeRequest('GET', '/referral-withdrawals', query: $query, timeout: 20);
+    }
+
+    /**
+     * A single referral withdrawal.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws GameApiException 404 when the withdrawal does not exist
+     */
+    public function getReferralWithdrawal(int $withdrawalId): array
+    {
+        $enc = $this->encryptId($withdrawalId);
+
+        return $this->makeRequest('GET', "/referral-withdrawals/{$enc}")['data'] ?? [];
+    }
+
+    /**
+     * Record the real outcome of a pending or processing withdrawal. `failed` refunds the
+     * customer's referral wallet. The caller owns the Idempotency-Key so a retry of the same
+     * attempt replays instead of settling twice.
+     *
+     * @return array<string, mixed> The settled withdrawal.
+     *
+     * @throws GameApiException 404 not found, 409 already settled or receipt taken, 422 validation
+     */
+    public function settleReferralWithdrawal(int $withdrawalId, string $outcome, ?string $mpesaReceipt, string $note, string $idempotencyKey): array
+    {
+        if (! in_array($outcome, self::REFERRAL_WITHDRAWAL_OUTCOMES, true)) {
+            throw new GameApiException("Unsupported settlement outcome: {$outcome}", 422, 'Unsupported outcome');
+        }
+
+        $enc = $this->encryptId($withdrawalId);
+
+        $body = array_filter([
+            'outcome' => $outcome,
+            'mpesa_receipt' => $outcome === 'completed' ? $mpesaReceipt : null,
+            'note' => $note,
+        ], fn ($value): bool => $value !== null);
+
+        $withdrawal = $this->makeRequest('POST', "/referral-withdrawals/{$enc}/settle", $body, timeout: 30, idempotencyKey: $idempotencyKey)['data'] ?? [];
+
+        // Settling moves money between payouts and referral wallets in the finance reports.
+        $this->forgetFinanceReports();
+
+        return $withdrawal;
     }
 
     // -------------------------------------------------------------------------

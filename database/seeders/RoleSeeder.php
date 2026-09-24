@@ -21,6 +21,7 @@ class RoleSeeder extends Seeder
             'account.wallet.edit',
             'complaints.view',
             'complaints.close',
+            'referral-withdrawals.settle',
 
             // Shareholders
             'holders.view',
