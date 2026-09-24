@@ -32,7 +32,8 @@ class IncomeStatementReport extends FinanceReportPage
         return [
             ['label' => 'Total Revenue', 'value' => Format::money($revenue['total'] ?? 0), 'description' => 'House cuts + gift/emoji sales', 'icon' => 'heroicon-m-banknotes', 'color' => 'success'],
             ['label' => 'Expenses', 'value' => Format::money($data['expenses']['total'] ?? 0), 'description' => ($data['expenses']['tracked'] ?? false) ? 'Recorded expenses' : 'Expenses not tracked', 'icon' => 'heroicon-m-receipt-percent', 'color' => 'warning'],
-            ['label' => 'Net Income', 'value' => Format::money($data['net_income'] ?? 0), 'description' => 'Revenue less expenses', 'icon' => 'heroicon-m-chart-bar', 'color' => ($data['net_income'] ?? 0) >= 0 ? 'primary' : 'danger'],
+            ['label' => 'Referral Payouts', 'value' => Format::money(static::amountOf($data['referral_payouts'] ?? 0)), 'description' => 'Referral withdrawals completed; bonuses earned '.Format::money(static::amountOf($data['memo']['referral_bonuses_earned'] ?? 0)), 'icon' => 'heroicon-m-gift', 'color' => 'warning'],
+            ['label' => 'Net Income', 'value' => Format::money($data['net_income'] ?? 0), 'description' => 'Revenue less expenses and referral payouts', 'icon' => 'heroicon-m-chart-bar', 'color' => ($data['net_income'] ?? 0) >= 0 ? 'primary' : 'danger'],
             ['label' => 'Unattributed Competition Income', 'value' => Format::money($revenue['competitions_unattributed'] ?? 0), 'description' => 'Not yet tied to a round tier', 'icon' => 'heroicon-m-question-mark-circle', 'color' => 'gray'],
         ];
     }
@@ -91,9 +92,18 @@ class IncomeStatementReport extends FinanceReportPage
                     ->all(),
             ],
             [
+                'title' => 'Referral programme',
+                'description' => 'Bonuses cost nothing until they are withdrawn, so only payouts are an expense.',
+                'headers' => ['Line', 'Amount'],
+                'rows' => [
+                    ['Referral payouts (expense)', $money(static::amountOf($data['referral_payouts'] ?? 0))],
+                    ['Bonuses earned (memo, not an expense)', $money(static::amountOf($data['memo']['referral_bonuses_earned'] ?? 0))],
+                ],
+            ],
+            [
                 'title' => 'Trend',
                 'description' => 'Revenue and net income per '.($data['meta']['period']['group_by'] ?? 'day'),
-                'headers' => ['Period', 'Games', 'Tournaments', 'Jackpots', 'Total revenue', 'Expenses', 'Net income'],
+                'headers' => ['Period', 'Games', 'Tournaments', 'Jackpots', 'Total revenue', 'Expenses', 'Referral payouts', 'Net income'],
                 'rows' => collect($data['series'] ?? [])
                     ->map(fn (array $row): array => [
                         $row['period'] ?? '—',
@@ -102,6 +112,7 @@ class IncomeStatementReport extends FinanceReportPage
                         $money($row['jackpots'] ?? 0),
                         $money($row['total'] ?? 0),
                         $money($row['expenses'] ?? 0),
+                        $money(static::amountOf($row['referral_payouts'] ?? 0)),
                         $money($row['net_income'] ?? 0),
                     ])
                     ->all(),

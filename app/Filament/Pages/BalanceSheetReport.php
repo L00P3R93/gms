@@ -31,7 +31,7 @@ class BalanceSheetReport extends FinanceReportPage
 
         return [
             ['label' => 'Cash Held', 'value' => Format::money($data['assets']['total'] ?? 0), 'description' => 'M-Pesa accounts', 'icon' => 'heroicon-m-building-library', 'color' => 'success'],
-            ['label' => 'Owed to Customers & Games', 'value' => Format::money($data['liabilities']['total'] ?? 0), 'description' => 'Wallets, escrow, unmatched deposits', 'icon' => 'heroicon-m-user-group', 'color' => 'warning'],
+            ['label' => 'Owed to Customers & Games', 'value' => Format::money($data['liabilities']['total'] ?? 0), 'description' => 'Wallets, escrow, referral wallets, unmatched deposits', 'icon' => 'heroicon-m-user-group', 'color' => 'warning'],
             ['label' => 'House Wallet', 'value' => Format::money($data['house_wallet'] ?? 0), 'description' => 'Booked house income', 'icon' => 'heroicon-m-home', 'color' => 'info'],
             ['label' => 'Difference', 'value' => Format::money($difference), 'description' => 'Cash − owed − house wallet', 'icon' => 'heroicon-m-scale', 'color' => $difference >= 0 ? 'primary' : 'danger'],
         ];
@@ -59,7 +59,7 @@ class BalanceSheetReport extends FinanceReportPage
                 'title' => 'What is owed',
                 'headers' => ['Liability', 'Amount'],
                 'rows' => collect($data['liabilities'] ?? [])
-                    ->map(fn ($amount, $key): array => [str($key)->replace('_', ' ')->title()->toString(), $money($amount)])
+                    ->map(fn ($amount, $key): array => [str($key)->replace('_', ' ')->title()->toString(), $money(static::amountOf($amount))])
                     ->values()
                     ->all(),
             ],
