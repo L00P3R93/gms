@@ -125,6 +125,7 @@ class GameApiService
                 $statusCode,
                 $apiMessage,
                 is_array($decoded['errors'] ?? null) ? $decoded['errors'] : [],
+                is_string($decoded['code'] ?? null) ? $decoded['code'] : null,
             );
         }
 
@@ -779,6 +780,62 @@ class GameApiService
     public function forgetUnmatchedDepositsSummary(): void
     {
         Cache::forget(self::UNMATCHED_SUMMARY_CACHE_KEY);
+    }
+
+    /**
+     * Credit an unmatched deposit's full amount to a customer's wallet, exactly like a
+     * plain C2B deposit (ledger entry, 5% excise, referral bonuses). The caller owns the
+     * Idempotency-Key so a retry of the same attempt replays instead of crediting twice.
+     * Endpoint: POST /api/v1/deposits/{enc}/assign  (rate limited: 30/min)
+     *
+     * @return array<string, mixed> The resolved deposit.
+     *
+     * @throws GameApiException 404 deposit or customer not found, 409 no longer unmatched, 422 validation
+     */
+    public function assignDeposit(int $depositId, int $customerId, string $note, string $idempotencyKey): array
+    {
+        $enc = $this->encryptId($depositId);
+
+        $deposit = $this->makeRequest('POST', "/deposits/{$enc}/assign", [
+            'customer_id' => $customerId,
+            'note' => $note,
+        ], timeout: 30, idempotencyKey: $idempotencyKey)['data'] ?? [];
+
+        $this->forgetDepositCaches();
+
+        return $deposit;
+    }
+
+    /**
+     * Record that an unmatched deposit was reversed on the M-Pesa portal. No money moves
+     * and no wallet changes; the deposit leaves the unmatched liability.
+     * Endpoint: POST /api/v1/deposits/{enc}/refund  (rate limited: 30/min)
+     *
+     * @return array<string, mixed> The resolved deposit.
+     *
+     * @throws GameApiException 404 not found, 409 no longer unmatched or reference already used, 422 validation
+     */
+    public function refundDeposit(int $depositId, string $mpesaReference, string $note, string $idempotencyKey): array
+    {
+        $enc = $this->encryptId($depositId);
+
+        $deposit = $this->makeRequest('POST', "/deposits/{$enc}/refund", [
+            'mpesa_reference' => $mpesaReference,
+            'note' => $note,
+        ], timeout: 30, idempotencyKey: $idempotencyKey)['data'] ?? [];
+
+        $this->forgetDepositCaches();
+
+        return $deposit;
+    }
+
+    /**
+     * A resolved deposit changes the unmatched summary and the finance reports.
+     */
+    protected function forgetDepositCaches(): void
+    {
+        $this->forgetUnmatchedDepositsSummary();
+        $this->forgetFinanceReports();
     }
 
     /**

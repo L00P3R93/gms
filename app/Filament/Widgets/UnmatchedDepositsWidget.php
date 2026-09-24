@@ -8,6 +8,7 @@ use App\Support\Format;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use Illuminate\Support\Facades\Log;
+use Livewire\Attributes\On;
 
 /**
  * M-Pesa payments credited to nobody, from `GET /deposits/unmatched`. Shown on
@@ -18,6 +19,11 @@ use Illuminate\Support\Facades\Log;
  */
 class UnmatchedDepositsWidget extends BaseWidget
 {
+    /**
+     * Dispatched by the queue after a deposit is assigned or refunded.
+     */
+    public const REFRESH_EVENT = 'unmatched-deposits-changed';
+
     protected static ?int $sort = 21;
 
     protected ?string $pollingInterval = null;
@@ -27,6 +33,12 @@ class UnmatchedDepositsWidget extends BaseWidget
     public static function canView(): bool
     {
         return UnmatchedDepositsPage::canAccess();
+    }
+
+    #[On(self::REFRESH_EVENT)]
+    public function refreshSummary(): void
+    {
+        // The summary cache was cleared by the write; re-rendering fetches it again.
     }
 
     protected function getStats(): array
