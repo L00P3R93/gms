@@ -56,6 +56,10 @@ class RoleSeeder extends Seeder
             'wallet-transactions.view',
             'income-distributions.view',
             'api-income-logs.view',
+            'deposits.view',
+            'deposits.assign',
+            'deposits.refund',
+            'deposits.match',
 
             // Game Results
             'game-results.view',
@@ -102,6 +106,7 @@ class RoleSeeder extends Seeder
             'company-withdrawals.view', 'company-withdrawals.create',
             'wallet-transactions.view',
             'income-distributions.view',
+            'deposits.view',
             'game-results.view', 'jackpot-results.view', 'tournament-results.view',
             'reports.view',
         ];

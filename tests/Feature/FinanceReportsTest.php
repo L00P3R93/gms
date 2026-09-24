@@ -211,7 +211,7 @@ function dataset_pages(): array
 {
     return [
         IncomeStatementReport::class, CashFlowReport::class, BalanceSheetReport::class, TrialBalanceReport::class,
-        ReconciliationReport::class, TaxesReport::class, TopCustomersReport::class, DepositsPage::class,
+        ReconciliationReport::class, TaxesReport::class, TopCustomersReport::class,
         PlayerWithdrawalsPage::class, PurchasesPage::class, GamesReport::class, CompetitionsReport::class,
         LedgerReport::class, AdjustmentsReport::class, ApiExpensesReport::class, CustomerStatementReport::class,
         ExciseDutyReport::class, ExciseChargesReport::class, ExciseReturnsReport::class, ExciseRemittancesReport::class,

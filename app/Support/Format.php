@@ -44,6 +44,24 @@ class Format
     }
 
     /**
+     * A payer number as KadiApi sends it: M-Pesa replaces some with a SHA-256
+     * hash, which is shown as "Hidden by M-Pesa". Anything else is already masked.
+     */
+    public static function payerPhone(?string $msisdn): string
+    {
+        if (blank($msisdn)) {
+            return '—';
+        }
+
+        return self::isHashedPhone($msisdn) ? 'Hidden by M-Pesa' : $msisdn;
+    }
+
+    public static function isHashedPhone(?string $msisdn): bool
+    {
+        return (bool) preg_match('/^[a-f0-9]{64}$/i', (string) $msisdn);
+    }
+
+    /**
      * Mask all but the last four digits of a phone number.
      */
     public static function maskedPhone(int|string|null $phone): string
@@ -60,7 +78,8 @@ class Format
         }
 
         try {
-            return Carbon::parse($value);
+            // KadiApi may send UTC or +03:00; always show Nairobi (the app timezone).
+            return Carbon::parse($value)->setTimezone(config('app.timezone'));
         } catch (\Throwable) {
             return null;
         }
