@@ -1147,6 +1147,100 @@ class GameApiService
     }
 
     /**
+     * The customer's own referral code, link and QR code, or null when they have none yet.
+     *
+     * @return array{customer_id?: int, code?: string, link?: ?string, qr_code?: ?string}|null
+     */
+    public function getCustomerReferralCode(int $customerId): ?array
+    {
+        $enc = $this->encryptId($customerId);
+
+        try {
+            return $this->makeRequest('GET', "/customers/{$enc}/referral-code")['data'] ?? null;
+        } catch (GameApiException $e) {
+            if ($e->statusCode === 404) {
+                return null;
+            }
+
+            throw $e;
+        }
+    }
+
+    /**
+     * A referrer's counts, earnings and referral wallet balance.
+     *
+     * @return array<string, mixed>
+     */
+    public function getCustomerReferralStats(int $customerId): array
+    {
+        $enc = $this->encryptId($customerId);
+
+        return $this->makeRequest('GET', "/customers/{$enc}/referrals/stats")['data'] ?? [];
+    }
+
+    /**
+     * One page of the customers this customer referred, as the raw `{data, links, meta}` payload.
+     *
+     * @param  array<string, mixed>  $filters  status, from, to, page, per_page
+     * @return array<string, mixed>
+     */
+    public function listCustomerReferrals(int $customerId, array $filters = []): array
+    {
+        $enc = $this->encryptId($customerId);
+
+        return $this->makeRequest('GET', "/customers/{$enc}/referrals", query: $this->withoutBlankFilters($filters), timeout: 20);
+    }
+
+    /**
+     * Referral wallet balance plus one page of bonus history. Paging sits under `pagination`.
+     *
+     * @param  array<string, mixed>  $filters  page, per_page
+     * @return array{data?: array<string, mixed>, pagination?: array<string, int>}
+     */
+    public function getCustomerReferralWallet(int $customerId, array $filters = []): array
+    {
+        $enc = $this->encryptId($customerId);
+
+        return $this->makeRequest('GET', "/customers/{$enc}/referral-wallet", query: $this->withoutBlankFilters($filters), timeout: 20);
+    }
+
+    /**
+     * One page of the customer's referral withdrawals, as the raw `{data, links, meta}` payload.
+     *
+     * @param  array<string, mixed>  $filters  page, per_page
+     * @return array<string, mixed>
+     */
+    public function listCustomerReferralWithdrawals(int $customerId, array $filters = []): array
+    {
+        $enc = $this->encryptId($customerId);
+
+        return $this->makeRequest('GET', "/customers/{$enc}/referral-wallet/withdrawals", query: $this->withoutBlankFilters($filters), timeout: 20);
+    }
+
+    /**
+     * Who referred this customer (`referrer_id`, `code_used`, `created_at`), or null if nobody did.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getCustomerReferrer(int $customerId): ?array
+    {
+        $referral = $this->listReferrals(['referred_id' => $customerId, 'per_page' => 1])['data'][0] ?? null;
+
+        return is_array($referral) ? $referral : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    protected function withoutBlankFilters(array $filters): array
+    {
+        return collect($filters)
+            ->reject(fn ($value): bool => $value === null || $value === '')
+            ->all();
+    }
+
+    /**
      * How an admin can settle a withdrawal that M-Pesa never confirmed.
      *
      * @var list<string>
