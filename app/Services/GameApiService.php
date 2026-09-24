@@ -1132,6 +1132,17 @@ class GameApiService
     // -------------------------------------------------------------------------
 
     /**
+     * Programme-wide player referral stats from `GET /stats/referrals`, cached for a minute
+     * because the endpoint shares the 20/min `stats` limiter with every finance report.
+     *
+     * @return array<string, mixed>
+     */
+    public function getPlayerReferralProgrammeStats(): array
+    {
+        return Cache::remember('game_api:stats:referrals', 60, fn (): array => $this->makeRequest('GET', '/stats/referrals')['data'] ?? []);
+    }
+
+    /**
      * One page of referrals (who referred whom) as the raw `{data, links, meta}` payload.
      *
      * @param  array<string, mixed>  $filters  status, referrer_id, referred_id, from, to, page, per_page
