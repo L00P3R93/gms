@@ -2,7 +2,9 @@
 
 namespace App\Filament\Pages;
 
+use App\Concerns\ResolvesUnmatchedDeposits;
 use App\Filament\Widgets\UnmatchedDepositsWidget;
+use App\Models\AuditLog;
 use App\Services\GameApiService;
 use App\Support\ApiTablePaginator;
 use App\Support\DepositSuggestion;
@@ -31,6 +33,7 @@ use UnitEnum;
 class UnmatchedDepositsPage extends Page implements HasTable
 {
     use InteractsWithTable;
+    use ResolvesUnmatchedDeposits;
 
     public const TABS = [
         'unmatched' => 'Unmatched',
@@ -63,6 +66,13 @@ class UnmatchedDepositsPage extends Page implements HasTable
     public string $tab = 'unmatched';
 
     public bool $apiError = false;
+
+    /**
+     * Who in the GMS resolved each deposit on the current page, from the audit log.
+     *
+     * @var array<int, string>
+     */
+    protected array $gmsResolvers = [];
 
     public static function canAccess(): bool
     {
@@ -100,6 +110,7 @@ class UnmatchedDepositsPage extends Page implements HasTable
         return $table
             ->records(function (int|string $page, int|string $recordsPerPage): LengthAwarePaginator {
                 $paginator = ApiTablePaginator::fromReport($this->fetchDeposits((int) $page, (int) $recordsPerPage));
+                $this->gmsResolvers = $this->tab === 'unmatched' ? [] : static::gmsResolvers($paginator->getCollection()->pluck('id')->all());
 
                 // Key rows by deposit id so a row action always acts on the row that was clicked.
                 return $paginator->setCollection($paginator->getCollection()->keyBy(fn (array $row): string => (string) ($row['id'] ?? '')));
@@ -176,13 +187,17 @@ class UnmatchedDepositsPage extends Page implements HasTable
                 TextColumn::make('resolved_at')
                     ->label('Resolved')
                     ->state(fn (array $record): ?string => isset($record['resolution']['resolved_at']) ? Format::dateTime($record['resolution']['resolved_at']) : null)
-                    ->description(fn (array $record): ?string => static::resolvedBy($record['resolution']['resolved_by'] ?? null))
+                    ->description(fn (array $record): ?string => isset($this->gmsResolvers[(int) ($record['id'] ?? 0)])
+                        ? $this->gmsResolvers[(int) $record['id']].' (GMS)'
+                        : static::resolvedBy($record['resolution']['resolved_by'] ?? null))
                     ->size(TextSize::Small)
                     ->placeholder('—')
                     ->visible(fn (): bool => $this->tab !== 'unmatched'),
             ])
             ->recordActions([
                 $this->suggestionsAction(),
+                $this->assignDepositAction(),
+                $this->refundDepositAction(),
             ])
             ->paginated([10, 25, 50, 100])
             ->defaultPaginationPageOption(50)
@@ -227,6 +242,38 @@ class UnmatchedDepositsPage extends Page implements HasTable
             ->modalSubmitAction(false)
             ->modalCancelActionLabel('Close')
             ->visible(fn (array $record): bool => $this->tab === 'unmatched' && DepositSuggestion::top($record) !== null);
+    }
+
+    protected function afterDepositResolved(): void
+    {
+        $this->flushCachedTableRecords();
+        $this->dispatch(UnmatchedDepositsWidget::REFRESH_EVENT);
+    }
+
+    /**
+     * The GMS user who assigned or refunded each deposit. KadiApi only records the API key,
+     * so deposits resolved elsewhere (the auto-matcher, another key) have no entry.
+     *
+     * @param  list<int|string>  $depositIds
+     * @return array<int, string>
+     */
+    public static function gmsResolvers(array $depositIds): array
+    {
+        if ($depositIds === []) {
+            return [];
+        }
+
+        return AuditLog::query()
+            ->with('user:id,name')
+            ->where('auditable_type', 'KadiApi\\Deposit')
+            ->whereIn('event', ['assigned', 'refunded'])
+            ->whereIn('auditable_id', array_map('intval', $depositIds))
+            ->latest('id')
+            ->get()
+            ->unique('auditable_id')
+            ->filter(fn (AuditLog $log): bool => filled($log->user?->name))
+            ->mapWithKeys(fn (AuditLog $log): array => [(int) $log->auditable_id => $log->user->name])
+            ->all();
     }
 
     /**
