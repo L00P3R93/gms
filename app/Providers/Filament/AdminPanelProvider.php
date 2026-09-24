@@ -74,12 +74,13 @@ class AdminPanelProvider extends PanelProvider
                 Authenticate::class,
             ])
             ->navigationGroups([
-                NavigationGroup::make('🎮 Players'),
                 NavigationGroup::make('💸 Expenses & Payouts'),
-                NavigationGroup::make('📊 Financial'),
-                NavigationGroup::make('🤝 Shareholders'),
+                NavigationGroup::make('🎮 Players'),
                 NavigationGroup::make('🎯 Game Results'),
+                NavigationGroup::make('🤝 Shareholders'),
                 NavigationGroup::make('📈 Reports'),
+                NavigationGroup::make('🧾 Finance Reports'),
+                NavigationGroup::make('📊 Financial'),
                 NavigationGroup::make('👥 Access Management'),
                 NavigationGroup::make('⚙️ Administration'),
             ])
