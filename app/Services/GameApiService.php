@@ -712,15 +712,6 @@ class GameApiService
     }
 
     /**
-     * TASK-031: List all deposits.
-     * Endpoint: GET /api/v1/deposits
-     */
-    public function listDeposits(): array
-    {
-        return $this->makeRequest('GET', '/deposits');
-    }
-
-    /**
      * List all player withdrawal requests.
      * Endpoint: GET /api/v1/withdraws
      */
@@ -739,14 +730,17 @@ class GameApiService
     }
 
     /**
-     * TASK-031: Get a single deposit by ID.
-     * Endpoint: GET /api/v1/deposits/{enc}
+     * One deposit with its payer, excise split and customer. For lists use the
+     * paginated `/finance/deposits` report; `GET /deposits` is unpaginated.
+     * Endpoint: GET /api/v1/deposits/{enc}  (rate limited: 20/min)
+     *
+     * @return array<string, mixed>
      */
     public function getDeposit(int $depositId): array
     {
         $enc = $this->encryptId((string) $depositId);
 
-        return $this->makeRequest('GET', "/deposits/{$enc}");
+        return $this->makeRequest('GET', "/deposits/{$enc}")['data'] ?? [];
     }
 
     /**

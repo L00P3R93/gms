@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\GameApiException;
+use App\Models\User;
 use App\Services\GameApiService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -14,12 +15,21 @@ use Illuminate\Support\Facades\Log;
  */
 class FinanceExportController extends Controller
 {
+    /**
+     * Exports opened to a permission other than the admin finance default.
+     *
+     * @var array<string, string>
+     */
+    public const REPORT_PERMISSIONS = [
+        'deposits' => 'deposits.view',
+    ];
+
     public function __invoke(Request $request, string $report, GameApiService $gameApi): Response
     {
         $user = $request->user();
 
-        abort_unless(($user?->isAdmin() ?? false) && $user->hasPermissionTo('reports.view'), 403);
         abort_unless(in_array($report, GameApiService::FINANCE_EXPORTS, true), 404);
+        abort_unless($this->canExport($user, $report), 403);
 
         $filters = $request->validate([
             'from' => ['nullable', 'date_format:Y-m-d'],
@@ -56,5 +66,22 @@ class FinanceExportController extends Controller
             'Content-Type' => 'text/csv; charset=UTF-8',
             'Content-Disposition' => 'attachment; filename="'.$csv['filename'].'"',
         ]);
+    }
+
+    /**
+     * Exports follow the page they come from: most are admin finance reports,
+     * but a report with its own permission (deposits, for support) uses that.
+     */
+    protected function canExport(?User $user, string $report): bool
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        if (isset(self::REPORT_PERMISSIONS[$report])) {
+            return $user->hasPermissionTo(self::REPORT_PERMISSIONS[$report]);
+        }
+
+        return $user->isAdmin() && $user->hasPermissionTo('reports.view');
     }
 }
