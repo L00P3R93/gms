@@ -125,13 +125,13 @@ it('opens a deposit with its excise split and resolution', function (): void {
         'id' => 8, 'trans_id' => 'UIKEQ8ABCD', 'trans_time' => '2026-09-24T07:30:00Z', 'amount' => 1000, 'name' => 'JOHN DOE',
         'short_code' => '4007279', 'status' => 2, 'excise_amount' => '50.00', 'net_amount' => '950.00',
         'customer' => ['id' => 42, 'name' => 'Wanjiru Kamau', 'account_no' => 'KK-7WMK98TW'],
-        'resolution' => ['action' => 'assigned', 'note' => 'Typed her phone number', 'resolved_by' => 'Finance Admin', 'resolved_at' => '2026-09-24T08:00:00Z'],
+        'resolution' => ['action' => 'assigned', 'note' => 'Typed her phone number', 'resolved_by' => 'api_key:3', 'resolved_at' => '2026-09-24T08:00:00Z'],
     ]])]);
     $this->actingAs($this->manager);
 
     Livewire::test(DepositsPage::class)
         ->mountAction(TestAction::make('view')->table('8'))
-        ->assertMountedActionModalSee(['KES 950.00', 'KES 50.00', 'Wanjiru Kamau · KK-7WMK98TW', 'Processed', 'Typed her phone number', '24 Sep 2026, 11:00'])
+        ->assertMountedActionModalSee(['KES 950.00', 'KES 50.00', 'Wanjiru Kamau · KK-7WMK98TW', 'Processed', 'Typed her phone number', 'GMS (API key #3)', '24 Sep 2026, 11:00'])
         ->assertMountedActionModalSeeHtml(AccountResource::getUrl('view', ['record' => 42]));
 });
 

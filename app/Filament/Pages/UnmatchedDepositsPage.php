@@ -164,7 +164,7 @@ class UnmatchedDepositsPage extends Page implements HasTable
                     ->label(fn (): string => $this->tab === 'refunded' ? 'Reversal ref' : 'Credited to')
                     ->state(fn (array $record): ?string => static::resolutionTarget($record))
                     ->placeholder('—')
-                    ->url(fn (array $record): ?string => $this->tab === 'assigned' ? ReferralWithdrawalsPage::customerUrl($record['resolution']['customer']['id'] ?? $record['resolution']['customer_id'] ?? null) : null)
+                    ->url(fn (array $record): ?string => $this->tab === 'assigned' ? ReferralWithdrawalsPage::customerUrl($record['resolution']['customer_id'] ?? null) : null)
                     ->visible(fn (): bool => $this->tab !== 'unmatched'),
                 TextColumn::make('resolution_note')
                     ->label('Note')
@@ -173,10 +173,10 @@ class UnmatchedDepositsPage extends Page implements HasTable
                     ->tooltip(fn (array $record): ?string => $record['resolution']['note'] ?? null)
                     ->placeholder('—')
                     ->visible(fn (): bool => $this->tab !== 'unmatched'),
-                TextColumn::make('resolved_by')
+                TextColumn::make('resolved_at')
                     ->label('Resolved')
-                    ->state(fn (array $record): ?string => static::resolvedBy($record['resolution'] ?? []))
-                    ->description(fn (array $record): ?string => isset($record['resolution']['resolved_at']) ? Format::dateTime($record['resolution']['resolved_at']) : null)
+                    ->state(fn (array $record): ?string => isset($record['resolution']['resolved_at']) ? Format::dateTime($record['resolution']['resolved_at']) : null)
+                    ->description(fn (array $record): ?string => static::resolvedBy($record['resolution']['resolved_by'] ?? null))
                     ->size(TextSize::Small)
                     ->placeholder('—')
                     ->visible(fn (): bool => $this->tab !== 'unmatched'),
@@ -269,6 +269,7 @@ class UnmatchedDepositsPage extends Page implements HasTable
 
     /**
      * The customer credited, or the M-Pesa reversal reference for a refund.
+     * KadiApi sends only `customer_id` (null for refunds), not the name.
      *
      * @param  array<string, mixed>  $deposit
      */
@@ -280,21 +281,26 @@ class UnmatchedDepositsPage extends Page implements HasTable
             return $resolution['mpesa_reference'] ?? null;
         }
 
-        $customer = is_array($resolution['customer'] ?? null) ? $resolution['customer'] : [];
-        $name = $customer['name'] ?? $resolution['customer_name'] ?? null;
-        $id = $customer['id'] ?? $resolution['customer_id'] ?? null;
-
-        return $name ?? ($id !== null ? 'Customer #'.$id : null);
+        return filled($resolution['customer_id'] ?? null) ? 'Customer #'.$resolution['customer_id'] : null;
     }
 
     /**
-     * @param  array<string, mixed>  $resolution
+     * KadiApi's `resolved_by` names what resolved the deposit, not who:
+     * `api_key:{id}` for a request with an API key (the GMS), or
+     * `command:deposits:match-unmatched` for the account-number matcher.
      */
-    public static function resolvedBy(array $resolution): ?string
+    public static function resolvedBy(?string $resolvedBy): ?string
     {
-        $by = $resolution['resolved_by'] ?? null;
+        if (blank($resolvedBy)) {
+            return null;
+        }
 
-        return is_array($by) ? ($by['name'] ?? null) : $by;
+        return match (true) {
+            str_starts_with($resolvedBy, 'api_key:') => 'GMS (API key #'.substr($resolvedBy, 8).')',
+            $resolvedBy === 'command:deposits:match-unmatched' => 'Auto-match',
+            str_starts_with($resolvedBy, 'command:') => 'Command '.substr($resolvedBy, 8),
+            default => $resolvedBy,
+        };
     }
 
     /**

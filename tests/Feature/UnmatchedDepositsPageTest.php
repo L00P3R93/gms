@@ -153,23 +153,29 @@ it('labels every match kind, the paid-from-and-typed case, shared numbers and un
 it('shows how assigned and refunded deposits were resolved', function (): void {
     fakeUnmatchedApi([
         'assigned' => unmatchedQueue([unmatchedDeposit(['status' => 'assigned', 'resolution' => [
-            'action' => 'assigned', 'customer_id' => 42, 'customer_name' => 'Wanjiru Kamau', 'note' => 'Typed her phone number as the account',
-            'resolved_by' => 'Finance Admin', 'resolved_at' => '2026-09-24T08:00:00Z',
+            'action' => 'assigned', 'customer_id' => 42, 'mpesa_reference' => null, 'note' => 'Typed her phone number as the account',
+            'resolved_by' => 'api_key:3', 'resolved_at' => '2026-09-24T08:00:00Z',
+        ]]), unmatchedDeposit(['id' => 33, 'status' => 'assigned', 'resolution' => [
+            'action' => 'assigned', 'customer_id' => 44, 'mpesa_reference' => null, 'note' => 'Bill ref matches KK-6AA8B1DAAF392',
+            'resolved_by' => 'command:deposits:match-unmatched', 'resolved_at' => '2026-09-24T08:05:00Z',
         ]])]),
         'refunded' => unmatchedQueue([unmatchedDeposit(['status' => 'refunded', 'resolution' => [
-            'action' => 'refunded', 'mpesa_reference' => 'RKA1B2C3D4', 'note' => 'Payer asked for it back',
-            'resolved_by' => ['id' => 3, 'name' => 'Finance Lead'], 'resolved_at' => '2026-09-24T09:30:00+03:00',
+            'action' => 'refunded', 'customer_id' => null, 'mpesa_reference' => 'RKA1B2C3D4', 'note' => 'Payer asked for it back',
+            'resolved_by' => null, 'resolved_at' => '2026-09-24T09:30:00+03:00',
         ]])]),
     ]);
     $this->actingAs($this->manager);
 
     Livewire::test(UnmatchedDepositsPage::class)
         ->call('setTab', 'assigned')
-        ->assertSee(['Credited to', 'Wanjiru Kamau', 'Typed her phone number as the account', 'Finance Admin', '24 Sep 2026, 11:00'])
+        ->assertSee(['Credited to', 'Customer #42', 'Typed her phone number as the account', 'GMS (API key #3)', '24 Sep 2026, 11:00'])
+        ->assertSee(['Customer #44', 'Auto-match'])
         ->assertSee(AccountResource::getUrl('view', ['record' => 42]))
+        ->assertDontSee('api_key:3')
         ->assertDontSee('Suggested customer')
         ->call('setTab', 'refunded')
-        ->assertSee(['Reversal ref', 'RKA1B2C3D4', 'Payer asked for it back', 'Finance Lead', '24 Sep 2026, 09:30']);
+        ->assertSee(['Reversal ref', 'RKA1B2C3D4', 'Payer asked for it back', '24 Sep 2026, 09:30'])
+        ->assertDontSee('Customer #');
 
     Http::assertSent(fn (Request $request): bool => str_contains($request->url(), 'status=assigned'));
     Http::assertSent(fn (Request $request): bool => str_contains($request->url(), 'status=refunded'));

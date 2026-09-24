@@ -11,7 +11,9 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * M-Pesa payments credited to nobody, from `GET /deposits/unmatched`. Shown on
- * the dashboard and above the queue. Cached for a minute and never polled,
+ * the dashboard and above the queue. KadiApi's summary always counts deposits
+ * still unmatched, ignoring the status and date filters, so it is labelled as
+ * a total rather than a count for the open tab. Cached for a minute and never polled,
  * because the endpoint shares KadiApi's 20/min limiter with the finance reports.
  */
 class UnmatchedDepositsWidget extends BaseWidget
@@ -46,7 +48,7 @@ class UnmatchedDepositsWidget extends BaseWidget
                 ->description(match (true) {
                     $error => 'KadiApi could not be reached',
                     $count === 0 => 'Every payment is credited to a customer',
-                    default => 'Payments credited to nobody · open the queue',
+                    default => 'Credited to nobody, across all dates · open the queue',
                 })
                 ->descriptionIcon($count > 0 ? 'heroicon-m-exclamation-triangle' : 'heroicon-m-check-circle')
                 ->color(match (true) {
@@ -57,7 +59,7 @@ class UnmatchedDepositsWidget extends BaseWidget
                 ->url($url),
 
             Stat::make('Unmatched Amount', $error ? '—' : Format::money($summary['unmatched_amount'] ?? 0))
-                ->description('Owed to players until assigned or refunded')
+                ->description('Every deposit still unmatched, any date · owed until assigned or refunded')
                 ->descriptionIcon('heroicon-m-banknotes')
                 ->color($error ? 'gray' : ($count > 0 ? 'danger' : 'success'))
                 ->url($url),
