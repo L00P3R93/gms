@@ -33,8 +33,22 @@ class CashFlowReport extends FinanceReportPage
             ['label' => 'Cash In', 'value' => Format::money($totals['cash_in']['total'] ?? 0), 'description' => 'M-Pesa payments received', 'icon' => 'heroicon-m-arrow-down-tray', 'color' => 'success'],
             ['label' => 'Cash Out (Paid)', 'value' => Format::money($totals['cash_out']['paid'] ?? 0), 'description' => 'Withdrawals paid to players', 'icon' => 'heroicon-m-arrow-up-tray', 'color' => 'info'],
             ['label' => 'Pending Payouts', 'value' => Format::money($totals['cash_out']['pending'] ?? 0), 'description' => 'Awaiting M-Pesa confirmation', 'icon' => 'heroicon-m-clock', 'color' => 'warning'],
-            ['label' => 'Net Cash', 'value' => Format::money($totals['net_cash'] ?? 0), 'description' => 'Cash in less cash out', 'icon' => 'heroicon-m-banknotes', 'color' => ($totals['net_cash'] ?? 0) >= 0 ? 'primary' : 'danger'],
+            ['label' => 'Referral Payouts (Paid)', 'value' => Format::money(static::referralPayouts($data)['paid'] ?? 0), 'description' => 'From the 4151665 referral shortcode', 'icon' => 'heroicon-m-gift', 'color' => 'warning'],
+            ['label' => 'Net Cash', 'value' => Format::money($totals['net_cash'] ?? 0), 'description' => 'Cash in less paid withdrawals, excise remitted, referral payouts and refunds', 'icon' => 'heroicon-m-banknotes', 'color' => ($totals['net_cash'] ?? 0) >= 0 ? 'primary' : 'danger'],
         ];
+    }
+
+    /**
+     * The `referral_payouts` block (paid, pending, failed), which sits with the other totals.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected static function referralPayouts(array $data): array
+    {
+        $payouts = $data['totals']['referral_payouts'] ?? $data['referral_payouts'] ?? [];
+
+        return is_array($payouts) ? $payouts : [];
     }
 
     protected function blocks(array $data): array
@@ -61,9 +75,18 @@ class CashFlowReport extends FinanceReportPage
                     ->all(),
             ],
             [
+                'title' => 'Referral payouts (4151665)',
+                'description' => 'Paid by completion date, failed by failure date, pending by request date.',
+                'headers' => ['Status', 'Amount'],
+                'rows' => collect(static::referralPayouts($data))
+                    ->map(fn ($amount, $status): array => [$label($status), $money($amount)])
+                    ->values()
+                    ->all(),
+            ],
+            [
                 'title' => 'Trend',
                 'description' => 'Per '.($data['meta']['period']['group_by'] ?? 'day'),
-                'headers' => ['Period', 'Cash in', 'Paid out', 'Pending', 'Failed', 'Net cash'],
+                'headers' => ['Period', 'Cash in', 'Paid out', 'Pending', 'Failed', 'Referral paid', 'Net cash'],
                 'rows' => collect($data['series'] ?? [])
                     ->map(fn (array $row): array => [
                         $row['period'] ?? '—',
@@ -71,6 +94,7 @@ class CashFlowReport extends FinanceReportPage
                         $money($row['cash_out']['paid'] ?? 0),
                         $money($row['cash_out']['pending'] ?? 0),
                         $money($row['cash_out']['failed'] ?? 0),
+                        $money(static::referralPayouts($row)['paid'] ?? 0),
                         $money($row['net_cash'] ?? 0),
                     ])
                     ->all(),

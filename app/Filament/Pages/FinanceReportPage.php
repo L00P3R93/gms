@@ -103,6 +103,18 @@ abstract class FinanceReportPage extends BaseReportPage
     }
 
     /**
+     * A money figure that the API may send as a plain number or as a block with a `total`.
+     */
+    protected static function amountOf(mixed $value): float
+    {
+        if (is_array($value)) {
+            return (float) ($value['total'] ?? $value['amount'] ?? 0);
+        }
+
+        return is_numeric($value) ? (float) $value : 0.0;
+    }
+
+    /**
      * @return array<int, class-string>
      */
     protected function getHeaderWidgets(): array
