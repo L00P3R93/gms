@@ -9,6 +9,7 @@
         "php": "^8.4",
         "afatmustafa/blade-hugeicons": "^2.0",
         "andreiio/blade-iconoir": "^4.7",
+        "bacon/bacon-qr-code": "~3.1",
         "barryvdh/laravel-dompdf": "^3.1",
         "blade-ui-kit/blade-heroicons": "^2.7",
         "blade-ui-kit/blade-icons": "^1.10",

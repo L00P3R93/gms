@@ -1167,6 +1167,25 @@ class GameApiService
     }
 
     /**
+     * Set or change the customer's referral code, link and QR code. Earlier referrals and
+     * earnings are kept; the old code stops matching new signups.
+     *
+     * @return array<string, mixed> The saved code, link and QR code.
+     *
+     * @throws GameApiException 409 when another customer has the code, 422 on validation
+     */
+    public function updateCustomerReferralCode(int $customerId, string $code, string $link, string $qrCode, string $idempotencyKey): array
+    {
+        $enc = $this->encryptId($customerId);
+
+        return $this->makeRequest('PUT', "/customers/{$enc}/referral-code", [
+            'code' => $code,
+            'link' => $link,
+            'qr_code' => $qrCode,
+        ], timeout: 20, idempotencyKey: $idempotencyKey)['data'] ?? [];
+    }
+
+    /**
      * A referrer's counts, earnings and referral wallet balance.
      *
      * @return array<string, mixed>

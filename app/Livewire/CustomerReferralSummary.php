@@ -2,20 +2,30 @@
 
 namespace App\Livewire;
 
+use App\Exceptions\GameApiException;
 use App\Filament\Pages\ReferralsPage;
 use App\Filament\Pages\ReferralWithdrawalsPage;
 use App\Services\GameApiService;
+use App\Support\ApiAuditLog;
 use App\Support\Format;
+use App\Support\ReferralCode;
+use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Components\ViewEntry;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Schemas\Schema;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 
 /**
@@ -114,6 +124,7 @@ class CustomerReferralSummary extends Component implements HasActions, HasSchema
             ->components([
                 Section::make('Referral code')
                     ->columnSpan(1)
+                    ->afterHeader([$this->changeReferralCodeAction()])
                     ->schema(fn (): array => match (true) {
                         in_array('code', $this->failed, true) => [TextEntry::make('code_unavailable')->hiddenLabel()->state($unavailable)->color('warning')],
                         $this->referralCode === null => [TextEntry::make('no_code')->hiddenLabel()->state('No referral code yet.')->color('gray')],
@@ -194,6 +205,108 @@ class CustomerReferralSummary extends Component implements HasActions, HasSchema
                                 ->numeric(),
                         ]),
             ]);
+    }
+
+    public static function canEditReferralCodes(): bool
+    {
+        return auth()->user()?->hasPermissionTo('referral-codes.edit') ?? false;
+    }
+
+    /**
+     * Set or change the customer's code. The GMS rebuilds the link and QR code the way the
+     * player app does, so all three stay in step. A 409 (code taken) and KadiApi's 422 errors
+     * land on the code field; every attempt is written to the audit log.
+     */
+    public function changeReferralCodeAction(): Action
+    {
+        return Action::make('changeReferralCode')
+            ->label(fn (): string => $this->referralCode === null ? 'Set code' : 'Change code')
+            ->icon('heroicon-o-pencil-square')
+            ->color('gray')
+            ->size('sm')
+            ->visible(fn (): bool => static::canEditReferralCodes() && ! in_array('code', $this->failed, true))
+            ->modalHeading(fn (): string => $this->referralCode === null ? 'Set referral code' : 'Change referral code')
+            ->modalDescription('The link and QR code are rebuilt from the new code. Earlier referrals and earnings are kept, but the old code, link and QR code stop working for new signups.')
+            ->modalSubmitActionLabel('Save code')
+            // fillForm() replaces the form's defaults, so the Idempotency-Key is generated here.
+            ->fillForm(fn (): array => [
+                'idempotency_key' => Str::uuid()->toString(),
+                'code' => $this->referralCode['code'] ?? null,
+            ])
+            ->schema([
+                Hidden::make('idempotency_key'),
+                TextInput::make('code')
+                    ->label('Referral code')
+                    ->required()
+                    ->regex(ReferralCode::PATTERN)
+                    ->validationMessages(['regex' => 'The code must be 4 to 20 letters or digits.'])
+                    ->live(onBlur: true)
+                    ->helperText(fn (?string $state): string => 'Link: '.ReferralCode::link(filled($state) ? $state : '…'))
+                    ->dehydrateStateUsing(fn (?string $state): string => ReferralCode::normalize((string) $state)),
+            ])
+            ->action(function (array $data, Action $action): void {
+                $code = $data['code'];
+                $link = ReferralCode::link($code);
+                $qrCode = ReferralCode::qrCodeDataUri($link);
+                $auditPayload = ['code' => $code, 'link' => $link, 'qr_code' => 'PNG data URI, '.strlen($qrCode).' chars', 'idempotency_key' => $data['idempotency_key']];
+
+                try {
+                    $saved = app(GameApiService::class)->updateCustomerReferralCode($this->customerId, $code, $link, $qrCode, $data['idempotency_key']);
+                } catch (GameApiException $e) {
+                    ApiAuditLog::record('ReferralCode', $this->customerId, 'update_failed', $auditPayload, $e->statusCode, [
+                        'message' => $e->apiMessage !== '' ? $e->apiMessage : $e->getMessage(),
+                        'errors' => $e->errors,
+                    ]);
+
+                    $this->handleChangeCodeFailure($e, $action);
+
+                    return;
+                }
+
+                ApiAuditLog::record('ReferralCode', $this->customerId, 'updated', $auditPayload, 200, Arr::except($saved, ['qr_code']));
+
+                Notification::make()
+                    ->title('Referral code saved')
+                    ->body('The code is now '.($saved['code'] ?? $code).'.')
+                    ->success()
+                    ->send();
+
+                $this->referralCode = $saved !== [] ? $saved : ['code' => $code, 'link' => $link, 'qr_code' => $qrCode];
+                unset($this->cachedSchemas['summaryInfolist']);
+            });
+    }
+
+    /**
+     * A taken code (409) and validation errors (422) go on the code field with a fresh
+     * Idempotency-Key, because the corrected code is a new request. Rate limits, outages and
+     * server errors keep the modal open for a retry with the same key.
+     *
+     * @throws ValidationException
+     */
+    protected function handleChangeCodeFailure(GameApiException $e, Action $action): void
+    {
+        $message = $e->apiMessage !== '' ? $e->apiMessage : $e->getMessage();
+        $statePath = "mountedActions.{$action->getNestingIndex()}.data";
+
+        if (in_array($e->statusCode, [409, 422], true)) {
+            $this->mountedActions[$action->getNestingIndex()]['data']['idempotency_key'] = Str::uuid()->toString();
+
+            $codeErrors = $e->statusCode === 409 ? [$message] : Arr::wrap($e->errors['code'] ?? []);
+
+            if ($codeErrors !== []) {
+                throw ValidationException::withMessages(["{$statePath}.code" => $codeErrors]);
+            }
+        }
+
+        Notification::make()
+            ->title('Could not save the referral code')
+            ->body($message)
+            ->danger()
+            ->send();
+
+        if (in_array($e->statusCode, [0, 422, 429], true) || $e->statusCode >= 500) {
+            $action->halt();
+        }
     }
 
     /**
