@@ -110,7 +110,7 @@ it('orders dashboard widgets in contiguous groups of related widgets', function 
     $groups = [
         'activity' => ['StatsOverview', 'GameStatsWidget', 'PlayerEngagementWidget', 'PlayerRegistrationTrendWidget', 'AgentStatsWidget'],
         'income' => ['IncomeStatsOverviewWidget', 'FinanceOverviewWidget', 'RevenueChartWidget', 'StakesVersusPayoutsChartWidget', 'PurchasesStatsOverviewWidget'],
-        'cash' => ['MpesaBalanceStatsWidget', 'PlatformPositionWidget', 'ComplaintsStatsWidget', 'ExciseDutyWidget'],
+        'cash' => ['MpesaBalanceStatsWidget', 'PlatformPositionWidget', 'UnmatchedDepositsWidget', 'ComplaintsStatsWidget', 'ExciseDutyWidget'],
         'referrals' => ['ReferralProgrammeWidget', 'TopReferrersWidget', 'ReferralFinanceWidget', 'ReferralReconciliationWidget'],
         'payouts' => ['WithdrawalsThisMonthWidget', 'ShareholdersTableWidget', 'ShareDistributionChartWidget'],
         'players' => ['TopCustomersWidget'],

@@ -1,0 +1,66 @@
+<?php
+
+namespace App\Filament\Widgets;
+
+use App\Filament\Pages\UnmatchedDepositsPage;
+use App\Services\GameApiService;
+use App\Support\Format;
+use Filament\Widgets\StatsOverviewWidget as BaseWidget;
+use Filament\Widgets\StatsOverviewWidget\Stat;
+use Illuminate\Support\Facades\Log;
+
+/**
+ * M-Pesa payments credited to nobody, from `GET /deposits/unmatched`. Shown on
+ * the dashboard and above the queue. Cached for a minute and never polled,
+ * because the endpoint shares KadiApi's 20/min limiter with the finance reports.
+ */
+class UnmatchedDepositsWidget extends BaseWidget
+{
+    protected static ?int $sort = 21;
+
+    protected ?string $pollingInterval = null;
+
+    protected int|string|array $columnSpan = 'full';
+
+    public static function canView(): bool
+    {
+        return UnmatchedDepositsPage::canAccess();
+    }
+
+    protected function getStats(): array
+    {
+        try {
+            $summary = app(GameApiService::class)->getUnmatchedDepositsSummary();
+            $error = false;
+        } catch (\Throwable $e) {
+            Log::warning('Unmatched deposits summary failed', ['error' => $e->getMessage()]);
+            $summary = [];
+            $error = true;
+        }
+
+        $count = (int) ($summary['unmatched_count'] ?? 0);
+        $url = UnmatchedDepositsPage::getUrl();
+
+        return [
+            Stat::make('Unmatched Deposits', $error ? '—' : number_format($count))
+                ->description(match (true) {
+                    $error => 'KadiApi could not be reached',
+                    $count === 0 => 'Every payment is credited to a customer',
+                    default => 'Payments credited to nobody · open the queue',
+                })
+                ->descriptionIcon($count > 0 ? 'heroicon-m-exclamation-triangle' : 'heroicon-m-check-circle')
+                ->color(match (true) {
+                    $error => 'gray',
+                    $count > 0 => 'warning',
+                    default => 'success',
+                })
+                ->url($url),
+
+            Stat::make('Unmatched Amount', $error ? '—' : Format::money($summary['unmatched_amount'] ?? 0))
+                ->description('Owed to players until assigned or refunded')
+                ->descriptionIcon('heroicon-m-banknotes')
+                ->color($error ? 'gray' : ($count > 0 ? 'danger' : 'success'))
+                ->url($url),
+        ];
+    }
+}

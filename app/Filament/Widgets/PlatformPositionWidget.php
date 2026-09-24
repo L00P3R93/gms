@@ -19,7 +19,7 @@ class PlatformPositionWidget extends BaseWidget
 {
     use LoadsFinanceReport;
 
-    protected static ?int $sort = 21;
+    protected static ?int $sort = 20;
 
     protected ?string $pollingInterval = '120s';
 
