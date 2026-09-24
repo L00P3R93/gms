@@ -98,6 +98,14 @@ class UnmatchedDepositsPage extends Page implements HasTable
     }
 
     /**
+     * @return array<int, Action>
+     */
+    protected function getHeaderActions(): array
+    {
+        return [$this->matchByAccountAction()];
+    }
+
+    /**
      * @return array<int, class-string>
      */
     protected function getHeaderWidgets(): array
@@ -251,7 +259,7 @@ class UnmatchedDepositsPage extends Page implements HasTable
     }
 
     /**
-     * The GMS user who assigned or refunded each deposit. KadiApi only records the API key,
+     * The GMS user who assigned, refunded or matched each deposit. KadiApi only records the API key,
      * so deposits resolved elsewhere (the auto-matcher, another key) have no entry.
      *
      * @param  list<int|string>  $depositIds
@@ -266,7 +274,7 @@ class UnmatchedDepositsPage extends Page implements HasTable
         return AuditLog::query()
             ->with('user:id,name')
             ->where('auditable_type', 'KadiApi\\Deposit')
-            ->whereIn('event', ['assigned', 'refunded'])
+            ->whereIn('event', ['assigned', 'refunded', 'matched'])
             ->whereIn('auditable_id', array_map('intval', $depositIds))
             ->latest('id')
             ->get()
@@ -316,7 +324,8 @@ class UnmatchedDepositsPage extends Page implements HasTable
 
     /**
      * The customer credited, or the M-Pesa reversal reference for a refund.
-     * KadiApi sends only `customer_id` (null for refunds), not the name.
+     * KadiApi sends `customer_id` and `customer_name` (both null for refunds); the id is
+     * shown until the name is available.
      *
      * @param  array<string, mixed>  $deposit
      */
@@ -326,6 +335,10 @@ class UnmatchedDepositsPage extends Page implements HasTable
 
         if (($resolution['action'] ?? null) === 'refunded') {
             return $resolution['mpesa_reference'] ?? null;
+        }
+
+        if (filled($resolution['customer_name'] ?? null)) {
+            return $resolution['customer_name'];
         }
 
         return filled($resolution['customer_id'] ?? null) ? 'Customer #'.$resolution['customer_id'] : null;

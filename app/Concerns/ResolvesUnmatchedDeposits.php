@@ -24,9 +24,10 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Livewire\Attributes\Locked;
 
 /**
- * Assign and Record refund on the unmatched-deposit queue.
+ * Assign, Record refund and Match by account number on the unmatched-deposit queue.
  *
  * Assign credits the deposit to a customer's wallet through KadiApi; Record
  * refund only records a reversal already made on the Kizuka M-Pesa portal.
@@ -47,6 +48,15 @@ trait ResolvesUnmatchedDeposits
     public const OTHER_CUSTOMER = 'other';
 
     /**
+     * The dry run shown in the Match modal. Locked so the browser cannot fake one: the live
+     * match only runs when the server itself fetched a preview for this modal.
+     *
+     * @var array<string, mixed>|null
+     */
+    #[Locked]
+    public ?array $matchPreview = null;
+
+    /**
      * Refresh whatever shows the queue after an attempt changed a deposit, or found it resolved or gone.
      */
     abstract protected function afterDepositResolved(): void;
@@ -59,6 +69,150 @@ trait ResolvesUnmatchedDeposits
     public static function canRefundDeposits(): bool
     {
         return auth()->user()?->hasPermissionTo('deposits.refund') ?? false;
+    }
+
+    public static function canMatchDeposits(): bool
+    {
+        return auth()->user()?->hasPermissionTo('deposits.match') ?? false;
+    }
+
+    /**
+     * Match by account number: always a dry run first, shown in the modal, and the live
+     * call only when the admin confirms that list. Never matches on phone numbers.
+     */
+    protected function matchByAccountAction(): Action
+    {
+        return Action::make('matchByAccount')
+            ->label('Match by account number')
+            ->icon('heroicon-o-sparkles')
+            ->color('primary')
+            ->visible(fn (): bool => static::canMatchDeposits())
+            ->modalHeading('Match by account number')
+            ->modalDescription('These unmatched deposits have a bill ref that now exactly matches a customer account number. Phone numbers are never used. Each will be credited to that customer\'s wallet, with 5% excise duty. This cannot be undone from the GMS.')
+            ->modalWidth('4xl')
+            ->modalSubmitActionLabel(fn (): string => 'Assign '.number_format($count = (int) ($this->matchPreview['matched'] ?? 0)).' '.Str::plural('deposit', $count))
+            ->fillForm(function (Action $action): array {
+                $this->matchPreview = null;
+
+                try {
+                    $preview = app(GameApiService::class)->matchUnmatchedDeposits(dryRun: true);
+                } catch (GameApiException $e) {
+                    Notification::make()
+                        ->title('Could not preview the match')
+                        ->body($e->apiMessage !== '' ? $e->apiMessage : $e->getMessage())
+                        ->danger()
+                        ->send();
+
+                    $action->cancel();
+
+                    return [];
+                }
+
+                if ((int) ($preview['matched'] ?? 0) === 0) {
+                    Notification::make()
+                        ->title('Nothing to match')
+                        ->body('No unmatched deposit has a bill ref that matches an account number.')
+                        ->info()
+                        ->send();
+
+                    $action->cancel();
+
+                    return [];
+                }
+
+                $this->matchPreview = $preview;
+
+                // Generated here, not as a default: fillForm() replaces field defaults.
+                return ['idempotency_key' => Str::uuid()->toString()];
+            })
+            ->schema([Hidden::make('idempotency_key')])
+            ->modalContent(fn () => view('filament.pages.partials.deposit-match-preview', [
+                'preview' => $this->matchPreview ?? [],
+                'rows' => static::matchRows($this->matchPreview['items'] ?? []),
+            ]))
+            ->action(function (array $data, Action $action): void {
+                abort_unless(static::canMatchDeposits(), 403);
+
+                $preview = $this->matchPreview;
+
+                if ($preview === null) {
+                    Notification::make()->title('Preview the match first')->body('Open Match by account number again to see what will be assigned.')->warning()->send();
+
+                    return;
+                }
+
+                $payload = ['dry_run' => false, 'previewed' => (int) ($preview['matched'] ?? 0), 'idempotency_key' => $data['idempotency_key']];
+
+                try {
+                    $result = app(GameApiService::class)->matchUnmatchedDeposits(dryRun: false, idempotencyKey: $data['idempotency_key']);
+                } catch (GameApiException $e) {
+                    ApiAuditLog::record('DepositMatch', 0, 'match_failed', $payload, $e->statusCode, static::errorResponse($e));
+
+                    Notification::make()->title('Could not match deposits')->body($e->apiMessage !== '' ? $e->apiMessage : $e->getMessage())->danger()->send();
+
+                    // Rate limits, outages and server errors keep the modal open so a retry replays the same key.
+                    if ($e->statusCode === 0 || $e->statusCode === 429 || $e->statusCode >= 500) {
+                        $action->halt();
+                    }
+
+                    $this->matchPreview = null;
+                    $this->afterDepositResolved();
+
+                    return;
+                }
+
+                $this->matchPreview = null;
+
+                ApiAuditLog::record('DepositMatch', 0, 'matched', $payload, 200, $result);
+
+                // One entry per credited deposit, so the queue can name who assigned it.
+                foreach ($result['items'] ?? [] as $item) {
+                    if (is_array($item) && ($item['assigned'] ?? false) === true && isset($item['deposit_id'])) {
+                        ApiAuditLog::record('Deposit', (int) $item['deposit_id'], 'matched', $payload, 200, $item);
+                    }
+                }
+
+                $notAssigned = collect($result['items'] ?? [])->filter(fn ($item): bool => is_array($item) && ($item['assigned'] ?? false) !== true);
+
+                Notification::make()
+                    ->title('Assigned '.number_format($assigned = (int) ($result['assigned'] ?? 0)).' '.Str::plural('deposit', $assigned).' · '.Format::money($result['assigned_amount'] ?? 0))
+                    ->body(collect([
+                        (int) ($result['matched'] ?? 0) !== (int) ($preview['matched'] ?? 0)
+                            ? 'The preview showed '.number_format((int) ($preview['matched'] ?? 0)).'; '.number_format((int) ($result['matched'] ?? 0)).' matched when it ran.'
+                            : null,
+                        ...$notAssigned->map(fn (array $item): string => 'Not assigned: '.($item['trans_id'] ?? '#'.($item['deposit_id'] ?? '?')).' — '.($item['message'] ?? 'no reason given'))->all(),
+                    ])->filter()->implode("\n") ?: null)
+                    ->color($notAssigned->isEmpty() ? 'success' : 'warning')
+                    ->icon($notAssigned->isEmpty() ? 'heroicon-o-check-circle' : 'heroicon-o-exclamation-triangle')
+                    ->persistent()
+                    ->send();
+
+                $this->afterDepositResolved();
+            });
+    }
+
+    /**
+     * Display rows for the match list: deposit, amount, bill ref, customer and account number.
+     *
+     * @param  list<mixed>  $items
+     * @return list<array{deposit: string, amount: string, bill_ref: string, customer: string, customer_url: ?string, account_no: string, message: ?string, assigned: ?bool}>
+     */
+    public static function matchRows(array $items): array
+    {
+        return collect($items)
+            ->filter(fn ($item): bool => is_array($item))
+            ->map(fn (array $item): array => [
+                'deposit' => $item['trans_id'] ?? '#'.($item['deposit_id'] ?? '?'),
+                'amount' => Format::money($item['amount'] ?? 0),
+                'bill_ref' => (string) ($item['bill_ref_no'] ?? '—'),
+                'customer' => isset($item['customer_id']) ? 'Customer #'.$item['customer_id'] : '—',
+                'customer_url' => ReferralWithdrawalsPage::customerUrl($item['customer_id'] ?? null),
+                'account_no' => (string) ($item['account_no'] ?? '—'),
+                'message' => $item['message'] ?? null,
+                'assigned' => isset($item['assigned']) ? (bool) $item['assigned'] : null,
+            ])
+            ->values()
+            ->all();
     }
 
     protected function assignDepositAction(): Action
@@ -242,7 +396,7 @@ trait ResolvesUnmatchedDeposits
         $index = $action->getNestingIndex();
         $verb = $kind === 'assign' ? 'assign' : 'record the refund for';
 
-        $isTakenReference = $kind === 'refund' && $e->statusCode === 409 && static::isReferenceTaken($e, $message);
+        $isTakenReference = $kind === 'refund' && $e->statusCode === 409 && static::isReferenceTaken($e);
 
         if ($e->statusCode === 422 || $isTakenReference) {
             // The corrected form is a new request, so it must not replay this one's key.
@@ -289,18 +443,12 @@ trait ResolvesUnmatchedDeposits
     }
 
     /**
-     * KadiApi answers a refund with 409 both when the deposit is already resolved and when
-     * the reference is on another refund, with no `errors` or `code` today. A `code` or an
-     * `errors.mpesa_reference` entry wins when KadiApi sends one; until then the message
-     * decides ("That M-Pesa reference is already on another refund").
+     * A refund 409 is either `already_resolved` or `reference_used` (which also carries
+     * `errors.mpesa_reference`). The code decides, never the message wording.
      */
-    protected static function isReferenceTaken(GameApiException $e, string $message): bool
+    protected static function isReferenceTaken(GameApiException $e): bool
     {
-        return match (true) {
-            $e->errorCode === 'reference_used', isset($e->errors['mpesa_reference']) => true,
-            $e->errorCode !== null => false,
-            default => Str::contains(Str::lower($message), 'reference'),
-        };
+        return $e->errorCode === 'reference_used' || isset($e->errors['mpesa_reference']);
     }
 
     /**
