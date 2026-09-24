@@ -14,6 +14,7 @@ use Filament\Tables\Columns\Layout\Split;
 use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\Str;
 
 class CompanyWithdrawsTable
 {
@@ -83,12 +84,25 @@ class CompanyWithdrawsTable
                             return;
                         }
 
+                        // M-Pesa B2C pays whole shillings; truncating would pay less than the wallet is debited.
+                        if (floor((float) $record->amount) !== (float) $record->amount) {
+                            Notification::make()
+                                ->title('Amount must be whole shillings')
+                                ->body('M-Pesa cannot pay KES '.$record->amount.'. Edit the withdrawal to a whole amount first.')
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
+
                         try {
-                            $response = app(MpesaService::class)->b2c(
-                                $record->phone,
-                                $record->amount,
-                                $record->reason ?? 'Company Withdrawal'
-                            );
+                            $response = app(MpesaService::class)->b2c([
+                                'Amount' => (int) $record->amount,
+                                'PartyB' => $record->phone,
+                                // Safaricom accepts at most 100 characters of remarks.
+                                'Remarks' => Str::limit($record->reason ?: 'Company Withdrawal', 100, ''),
+                                'Occasion' => '',
+                            ]);
 
                             $conversationId = $response['ConversationID'] ?? null;
 

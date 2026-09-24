@@ -3,18 +3,27 @@
 namespace App\Filament\Widgets;
 
 use App\Concerns\LoadsFinanceReport;
+use App\Enums\CompanyWithdrawStatus;
+use App\Enums\PayoutStatus;
+use App\Enums\WithdrawStatus;
 use App\Filament\Pages\FinanceReportPage;
 use App\Filament\Pages\ReferralWithdrawalsPage;
+use App\Models\CompanyWithdraw;
+use App\Models\MpesaAccountBalance;
+use App\Models\Payout;
+use App\Models\Withdraw;
 use App\Support\Format;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
 /**
  * Referral programme money for finance: bonuses earned and payouts this month
- * (`/finance/referrals`), and whether the referral shortcode (type
- * `referral_b2c` on the balance sheet) still covers every unspent referral
- * balance. When it does not, withdrawals will start failing at M-Pesa.
- * Cached for a minute and never polled.
+ * (`/finance/referrals`), and whether the shortcode KadiApi pays referrals from
+ * still covers what is owed out of it. That shortcode is the GMS's own B2C
+ * shortcode, so its Utility balance comes from the local `b2c` balance row and
+ * is compared against unspent referral balances plus the GMS payouts already
+ * approved or sent from it. When it falls short, payouts start failing at
+ * M-Pesa. Cached for a minute and never polled.
  */
 class ReferralFinanceWidget extends BaseWidget
 {
@@ -36,22 +45,19 @@ class ReferralFinanceWidget extends BaseWidget
     }
 
     /**
-     * The referral shortcode's balance. When KadiApi lists several `referral_b2c` accounts,
-     * payouts are drawn from the utility account, so that one is used.
-     *
-     * @param  list<array<string, mixed>>  $accounts
+     * Balances older than this are flagged, matching the M-Pesa balance widget.
      */
-    public static function referralShortcodeBalance(array $accounts): ?float
+    public const STALE_AFTER_HOURS = 2;
+
+    /**
+     * GMS money approved or already sent from the B2C shortcode and not yet settled:
+     * payouts approved or processing, and company and shareholder withdrawals processing.
+     */
+    public static function gmsCommittedPayouts(): float
     {
-        $referralAccounts = collect($accounts)->filter(fn ($account): bool => is_array($account) && ($account['type'] ?? null) === 'referral_b2c');
-
-        if ($referralAccounts->isEmpty()) {
-            return null;
-        }
-
-        $utility = $referralAccounts->first(fn (array $account): bool => str_contains(strtolower((string) ($account['account'] ?? '')), 'utility'));
-
-        return (float) ($utility['amount'] ?? $referralAccounts->sum('amount'));
+        return (float) Payout::query()->whereIn('status', [PayoutStatus::Approved, PayoutStatus::Processing])->sum('amount')
+            + (float) CompanyWithdraw::query()->where('status', CompanyWithdrawStatus::Processing)->sum('amount')
+            + (float) Withdraw::query()->where('status', WithdrawStatus::Processing)->sum('amount');
     }
 
     protected function getStats(): array
@@ -60,7 +66,6 @@ class ReferralFinanceWidget extends BaseWidget
             'from' => today()->startOfMonth()->toDateString(),
             'to' => today()->toDateString(),
         ], self::CACHE_SECONDS);
-        $cashAccounts = $this->loadFinanceReport('balance-sheet', cacheSeconds: self::CACHE_SECONDS)['assets']['cash']['accounts'] ?? [];
         $error = $this->financeApiError;
 
         $bonuses = $report['bonuses_earned'] ?? [];
@@ -68,7 +73,6 @@ class ReferralFinanceWidget extends BaseWidget
         $position = $report['position'] ?? [];
         $openWithdrawals = $position['open_withdrawals'] ?? [];
         $unspent = (float) ($position['unspent_balances'] ?? 0);
-        $shortcodeBalance = static::referralShortcodeBalance($cashAccounts);
 
         return [
             Stat::make('Bonuses Earned (Month)', Format::money($bonuses['total'] ?? 0))
@@ -81,7 +85,7 @@ class ReferralFinanceWidget extends BaseWidget
                 ->descriptionIcon('heroicon-m-banknotes')
                 ->color($error ? 'gray' : 'primary'),
 
-            $this->shortcodeStat($shortcodeBalance, $unspent, $error),
+            $this->shortcodeStat(MpesaAccountBalance::latestOfType('b2c')->first(), $unspent, static::gmsCommittedPayouts(), $error),
 
             Stat::make('Open Withdrawals', number_format((int) ($openWithdrawals['count'] ?? 0)))
                 ->description(Format::money($openWithdrawals['amount'] ?? 0).' pending or processing')
@@ -96,22 +100,33 @@ class ReferralFinanceWidget extends BaseWidget
         ];
     }
 
-    protected function shortcodeStat(?float $shortcodeBalance, float $unspent, bool $error): Stat
+    protected function shortcodeStat(?MpesaAccountBalance $balance, float $unspent, float $gmsCommitted, bool $error): Stat
     {
-        if ($shortcodeBalance === null) {
-            return Stat::make('Referral Shortcode 4151665', 'Not fetched')
-                ->description('No referral_b2c balance on the balance sheet yet · owes '.Format::money($unspent))
+        $label = 'B2C Shortcode '.config('mpesa.b2c.short_code');
+        $owed = $unspent + $gmsCommitted;
+        $owedBreakdown = 'referral balances '.Format::money($unspent).' + GMS payouts '.Format::money($gmsCommitted);
+
+        if ($balance === null) {
+            return Stat::make($label, 'Not fetched')
+                ->description('No B2C balance yet (mpesa:fetch-balances) · owes '.$owedBreakdown)
                 ->descriptionIcon('heroicon-m-question-mark-circle')
                 ->color('gray');
         }
 
-        $shortfall = $unspent - $shortcodeBalance;
+        $available = (float) $balance->utility_account_balance;
+        $shortfall = $owed - $available;
+        $isStale = $balance->fetched_at->lt(now()->subHours(self::STALE_AFTER_HOURS));
+        $updated = ' · updated '.$balance->fetched_at->diffForHumans();
 
-        return Stat::make('Referral Shortcode 4151665', Format::money($shortcodeBalance))
-            ->description($shortfall > 0
-                ? 'Short by '.Format::money($shortfall).' against unspent balances — payouts will start failing'
-                : 'Covers unspent balances of '.Format::money($unspent))
-            ->descriptionIcon($shortfall > 0 ? 'heroicon-m-exclamation-triangle' : 'heroicon-m-check-circle')
-            ->color($error ? 'gray' : ($shortfall > 0 ? 'danger' : 'success'));
+        return Stat::make($label, Format::money($available))
+            ->description(($shortfall > 0
+                ? 'Short by '.Format::money($shortfall).' against '.$owedBreakdown.' — payouts will start failing'
+                : 'Covers '.$owedBreakdown).$updated)
+            ->descriptionIcon($shortfall > 0 ? 'heroicon-m-exclamation-triangle' : ($isStale ? 'heroicon-m-clock' : 'heroicon-m-check-circle'))
+            ->color(match (true) {
+                $shortfall > 0 => 'danger',
+                $isStale || $error => 'warning',
+                default => 'success',
+            });
     }
 }

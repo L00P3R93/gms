@@ -24,31 +24,16 @@ class MpesaBalanceStatsWidget extends BaseWidget
 
     protected function getStats(): array
     {
+        // C2B is no longer fetched: it is the same shortcode as B2C.
         $b2c = MpesaAccountBalance::latestOfType('b2c')->first();
-        $c2b = MpesaAccountBalance::latestOfType('c2b')->first();
 
         $stale = now()->subHours(2);
 
         return [
-            //            Stat::make('B2C Working Account', 'KES '.number_format($b2c?->working_account_balance ?? 0, 2))
-            //                ->description($this->formatLastUpdated($b2c?->fetched_at))
-            //                ->descriptionIcon('heroicon-m-banknotes')
-            //                ->color($this->getBalanceColor($b2c, $stale)),
-
             Stat::make('B2C Utility Account', 'KES '.number_format($b2c?->utility_account_balance ?? 0, 2))
                 ->description($this->formatLastUpdated($b2c?->fetched_at))
                 ->descriptionIcon('heroicon-m-banknotes')
                 ->color($this->getBalanceColor($b2c, $stale)),
-
-            //            Stat::make('C2B Working Account', 'KES '.number_format($c2b?->working_account_balance ?? 0, 2))
-            //                ->description($this->formatLastUpdated($c2b?->fetched_at))
-            //                ->descriptionIcon('heroicon-m-banknotes')
-            //                ->color($this->getBalanceColor($c2b, $stale)),
-
-            Stat::make('C2B Utility Account', 'KES '.number_format($c2b?->utility_account_balance ?? 0, 2))
-                ->description($this->formatLastUpdated($c2b?->fetched_at))
-                ->descriptionIcon('heroicon-m-banknotes')
-                ->color($this->getBalanceColor($c2b, $stale)),
         ];
     }
 

@@ -27,9 +27,10 @@ class CompanyWithdrawForm
                         ->prefixIcon(Heroicon::OutlinedPhone)
                         ->prefixIconColor('success'),
                     TextInput::make('amount')
-                        ->numeric()
+                        ->integer()
                         ->required()
                         ->minValue(1)
+                        ->helperText('M-Pesa pays whole shillings only.')
                         ->prefix('KES')
                         ->suffixIcon(Heroicon::OutlinedBanknotes)
                         ->suffixIconColor('warning')

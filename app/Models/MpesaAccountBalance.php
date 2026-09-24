@@ -44,7 +44,8 @@ class MpesaAccountBalance extends Model
     // -------------------------------------------------------------------------
 
     /**
-     * Parse the Safaricom AccountBalance response and store it.
+     * Parse the Safaricom AccountBalance response and store it. Each type keeps a single
+     * row that every fetch overwrites; nothing reads older balances.
      *
      * The ResultParameters contain an "AccountBalance" key with a value like:
      *   "Working Account|KES|0.00|0.00|0.00|0.00&Utility Account|KES|9023.00|9023.00|0.00|0.00&..."
@@ -75,8 +76,7 @@ class MpesaAccountBalance extends Model
 
         $parsed = self::parseAccountBalanceString($balanceString);
 
-        return self::create([
-            'type' => $type,
+        return self::updateOrCreate(['type' => $type], [
             'conversation_id' => $result['ConversationID'] ?? null,
             'originator_conversation_id' => $result['OriginatorConversationID'] ?? null,
             'transaction_id' => $result['TransactionID'] ?? null,
