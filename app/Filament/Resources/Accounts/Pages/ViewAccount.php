@@ -225,6 +225,14 @@ class ViewAccount extends Page
                                     ->schema($this->transactionRowSchema()),
                             ]),
 
+                        Tab::make('Referrals')
+                            ->schema([
+                                ViewEntry::make('referrals')
+                                    ->hiddenLabel()
+                                    ->view('infolists.referrals-tab')
+                                    ->viewData(['customerId' => $this->customerId]),
+                            ]),
+
                         Tab::make('Purchases')
                             ->badge(count($this->purchases))
                             ->schema([
