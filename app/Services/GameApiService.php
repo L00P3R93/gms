@@ -1461,6 +1461,62 @@ class GameApiService
     }
 
     // -------------------------------------------------------------------------
+    // Promo codes — signup bonus campaigns (writes use the `write` limiter: 30/min)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Statuses a promo code can have.
+     *
+     * @var list<string>
+     */
+    public const PROMO_CODE_STATUSES = ['active', 'expired', 'deactivated'];
+
+    /**
+     * One page of promo codes, newest first, as the `data` payload (`items` plus `pagination`).
+     *
+     * @param  array<string, mixed>  $filters  status, page, per_page
+     * @return array{items?: list<array<string, mixed>>, pagination?: array<string, int>}
+     */
+    public function listPromoCodes(array $filters = []): array
+    {
+        return $this->makeRequest('GET', '/promo-codes', query: $this->withoutBlankFilters($filters), timeout: 20)['data'] ?? [];
+    }
+
+    /**
+     * Create a promo code. Codes cannot be edited afterwards. The caller owns the
+     * Idempotency-Key so a retry of the same form submission replays instead of creating twice.
+     *
+     * @param  array{code: string, expires_at: string, max_redemptions?: ?int, note?: ?string}  $data  `expires_at` is `Y-m-d H:i` Nairobi time
+     * @return array<string, mixed> The new code.
+     *
+     * @throws GameApiException 422 on validation (including a duplicate code)
+     */
+    public function createPromoCode(array $data, string $idempotencyKey): array
+    {
+        $body = collect($data)
+            ->only(['code', 'expires_at', 'max_redemptions', 'note'])
+            ->reject(fn ($value): bool => $value === null || $value === '')
+            ->all();
+
+        return $this->makeRequest('POST', '/promo-codes', $body, timeout: 20, idempotencyKey: $idempotencyKey)['data'] ?? [];
+    }
+
+    /**
+     * Stop a promo code at once. Players who signed up with it but are not verified yet
+     * will not get the bonus.
+     *
+     * @return array<string, mixed> The deactivated code.
+     *
+     * @throws GameApiException 404 not found, 409 already deactivated
+     */
+    public function deactivatePromoCode(int $promoCodeId, string $idempotencyKey): array
+    {
+        $enc = $this->encryptId($promoCodeId);
+
+        return $this->makeRequest('POST', "/promo-codes/{$enc}/deactivate", timeout: 20, idempotencyKey: $idempotencyKey)['data'] ?? [];
+    }
+
+    // -------------------------------------------------------------------------
     // Wallet management helpers
     // -------------------------------------------------------------------------
 
