@@ -1516,6 +1516,21 @@ class GameApiService
         return $this->makeRequest('POST', "/promo-codes/{$enc}/deactivate", timeout: 20, idempotencyKey: $idempotencyKey)['data'] ?? [];
     }
 
+    /**
+     * A customer's signup bonuses and how much is still locked (can only be staked, not
+     * withdrawn, transferred or spent on coins).
+     *
+     * @return array{locked_amount?: float|int, items?: list<array<string, mixed>>}
+     *
+     * @throws GameApiException 404 when the customer does not exist
+     */
+    public function getCustomerPromotions(int $customerId): array
+    {
+        $enc = $this->encryptId($customerId);
+
+        return $this->makeRequest('GET', "/customers/{$enc}/promotions")['data'] ?? [];
+    }
+
     // -------------------------------------------------------------------------
     // Wallet management helpers
     // -------------------------------------------------------------------------

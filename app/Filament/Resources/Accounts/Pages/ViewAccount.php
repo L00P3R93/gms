@@ -233,6 +233,14 @@ class ViewAccount extends Page
                                     ->viewData(['customerId' => $this->customerId]),
                             ]),
 
+                        Tab::make('Promotions')
+                            ->schema([
+                                ViewEntry::make('promotions')
+                                    ->hiddenLabel()
+                                    ->view('infolists.promotions-tab')
+                                    ->viewData(['customerId' => $this->customerId]),
+                            ]),
+
                         Tab::make('Purchases')
                             ->badge(count($this->purchases))
                             ->schema([
