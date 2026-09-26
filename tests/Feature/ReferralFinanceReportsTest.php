@@ -157,7 +157,7 @@ it('shows referral payouts as an expense and bonuses as a memo on the income sta
         ->assertSee('KES 350.00')
         ->assertSee('Bonuses earned (memo, not an expense)')
         ->assertSee('KES 520.00')
-        ->assertSee('Revenue less expenses and referral payouts');
+        ->assertSee('Revenue less expenses, referral payouts and promotions');
 });
 
 it('shows referral payouts from the referral shortcode on the cash flow', function (): void {

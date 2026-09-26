@@ -21,6 +21,26 @@
             </x-filament::section>
         @endforeach
 
+        @foreach ($this->getProgressBars() as $bar)
+            <x-filament::section compact>
+                <div class="flex items-baseline justify-between gap-3">
+                    <p class="text-sm font-semibold text-gray-950 dark:text-white">{{ $bar['label'] }}</p>
+                    <p class="text-sm font-semibold" style="color: var(--{{ $bar['color'] }}-600);">{{ number_format($bar['percent'], 1) }}%</p>
+                </div>
+                <div
+                    role="progressbar"
+                    aria-label="{{ $bar['label'] }}"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    aria-valuenow="{{ min(100, $bar['percent']) }}"
+                    style="margin-top: 0.5rem; height: 0.625rem; border-radius: 9999px; overflow: hidden; background: color-mix(in oklab, var(--gray-400) 30%, transparent);"
+                >
+                    <div style="height: 100%; width: {{ min(100, $bar['percent']) }}%; border-radius: 9999px; background: var(--{{ $bar['color'] }}-500);"></div>
+                </div>
+                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ $bar['description'] }}</p>
+            </x-filament::section>
+        @endforeach
+
         {{ $this->reportInfolist }}
 
         @if ($this->hasItemsTable())

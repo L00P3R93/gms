@@ -36,6 +36,8 @@ use UnitEnum;
  * who can view customers sees the list; creating and deactivating codes needs
  * `promo-codes.manage`. Each write carries an Idempotency-Key generated when the
  * modal opens (fresh after a 422 or 409) and is written to the audit log.
+ * Finance users are warned when the house wallet, which pays the bonuses, is
+ * running low while codes are active.
  */
 class PromoCodesPage extends Page implements HasTable
 {
@@ -46,6 +48,11 @@ class PromoCodesPage extends Page implements HasTable
         'expired' => 'Expired',
         'deactivated' => 'Deactivated',
     ];
+
+    /**
+     * Below this house wallet balance (KES) finance users are warned while codes are active.
+     */
+    public const HOUSE_WALLET_WARNING_BELOW = 1000;
 
     public const DEACTIVATE_WARNING = 'The code stops working at once. Players who signed up with this code but haven\'t verified yet will not get the bonus. The same happens when a code expires.';
 
@@ -139,8 +146,48 @@ class PromoCodesPage extends Page implements HasTable
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('bonusCosts')
+                ->label('Bonus costs')
+                ->icon('heroicon-o-chart-bar')
+                ->color('gray')
+                ->visible(fn (): bool => SignupBonusesReport::canAccess())
+                ->url(fn (): string => SignupBonusesReport::getUrl()),
             $this->createPromoCodeAction(),
         ];
+    }
+
+    /**
+     * A warning for finance users when the house wallet is below
+     * {@see HOUSE_WALLET_WARNING_BELOW} while codes are active: KadiApi stops granting
+     * bonuses once it cannot cover one. Both lookups are cached for a minute.
+     */
+    public function houseWalletWarning(): ?string
+    {
+        if (! SignupBonusesReport::canAccess()) {
+            return null;
+        }
+
+        try {
+            $gameApi = app(GameApiService::class);
+            $activeCodes = $gameApi->countActivePromoCodes();
+
+            if ($activeCodes === 0) {
+                return null;
+            }
+
+            $houseWallet = (float) ($gameApi->financeReport('balance-sheet', cacheSeconds: 60)['house_wallet'] ?? 0);
+        } catch (\Throwable $e) {
+            Log::warning('House wallet check failed', ['error' => $e->getMessage()]);
+
+            return null;
+        }
+
+        if ($houseWallet >= self::HOUSE_WALLET_WARNING_BELOW) {
+            return null;
+        }
+
+        return 'The house wallet has '.Format::money($houseWallet).' and active promo codes: '.number_format($activeCodes)
+            .'. Each bonus costs KES 21.05; once the house wallet cannot cover one, KadiApi stops granting bonuses.';
     }
 
     public function table(Table $table): Table

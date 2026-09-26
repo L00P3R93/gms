@@ -97,6 +97,43 @@ abstract class FinanceReportPage extends BaseReportPage
         return [];
     }
 
+    /**
+     * Bars rendered above the breakdown tables, e.g. a budget used against its cap.
+     * `value` and `max` are raw amounts; `description` is display-formatted.
+     *
+     * @param  array<string, mixed>  $data
+     * @return list<array{label: string, value: float, max: float, description: string}>
+     */
+    protected function progressBars(array $data): array
+    {
+        return [];
+    }
+
+    /**
+     * @return list<array{label: string, description: string, percent: float, color: string}>
+     */
+    public function getProgressBars(): array
+    {
+        return collect($this->progressBars($this->getReport()))
+            ->filter(fn (array $bar): bool => $bar['max'] > 0)
+            ->map(function (array $bar): array {
+                $percent = round($bar['value'] / $bar['max'] * 100, 1);
+
+                return [
+                    'label' => $bar['label'],
+                    'description' => $bar['description'],
+                    'percent' => $percent,
+                    'color' => match (true) {
+                        $percent >= 100 => 'danger',
+                        $percent >= 80 => 'warning',
+                        default => 'primary',
+                    },
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
     public function hasItemsTable(): bool
     {
         return false;
