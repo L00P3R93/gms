@@ -1,4 +1,16 @@
 <x-filament-panels::page>
+    @if ($houseWalletWarning = $this->houseWalletWarning())
+        <x-filament::section>
+            <div class="flex items-center gap-3">
+                <x-filament::icon icon="heroicon-o-exclamation-triangle" class="h-5 w-5 shrink-0 text-warning-500" />
+                <div>
+                    <p class="text-sm font-semibold text-warning-600 dark:text-warning-400">House wallet running low</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ $houseWalletWarning }}</p>
+                </div>
+            </div>
+        </x-filament::section>
+    @endif
+
     <x-filament::section icon="heroicon-o-information-circle" compact>
         <x-slot name="heading">How the signup bonus works</x-slot>
 

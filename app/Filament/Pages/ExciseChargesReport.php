@@ -10,11 +10,17 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 
 /**
- * One row per deposit that was charged excise duty, with whether the duty was
- * reversed on a refund or already remitted to KRA.
+ * One row per excise duty charge, from a deposit or a signup bonus (`source`),
+ * with whether the duty was reversed on a refund or already remitted to KRA.
+ * Promotion charges have no deposit, M-Pesa code or payer number.
  */
 class ExciseChargesReport extends FinanceListReportPage
 {
+    public const SOURCES = [
+        'deposit' => 'Deposit',
+        'promotion' => 'Signup bonus',
+    ];
+
     public const STATUSES = [
         'charged' => 'Charged',
         'unremitted' => 'Unremitted',
@@ -54,7 +60,7 @@ class ExciseChargesReport extends FinanceListReportPage
         $unremitted = $summary['unremitted'] ?? [];
 
         return [
-            ['label' => 'Excise Charged', 'value' => Format::money($summary['excise'] ?? 0), 'description' => number_format((int) ($summary['charges'] ?? 0)).' deposits in the period', 'icon' => 'heroicon-m-receipt-percent', 'color' => 'info'],
+            ['label' => 'Excise Charged', 'value' => Format::money($summary['excise'] ?? 0), 'description' => number_format((int) ($summary['charges'] ?? 0)).' charges on deposits and signup bonuses', 'icon' => 'heroicon-m-receipt-percent', 'color' => 'info'],
             ['label' => 'Gross Deposits', 'value' => Format::money($summary['gross_deposits'] ?? 0), 'icon' => 'heroicon-m-banknotes', 'color' => 'primary'],
             ['label' => 'Unremitted', 'value' => Format::money($unremitted['excise'] ?? 0), 'description' => number_format((int) ($unremitted['charges'] ?? 0)).' charges not yet paid to KRA', 'icon' => 'heroicon-m-clock', 'color' => ($unremitted['excise'] ?? 0) > 0 ? 'warning' : 'success'],
         ];
@@ -86,6 +92,10 @@ class ExciseChargesReport extends FinanceListReportPage
             TextColumn::make('charged_at')
                 ->label('Charged')
                 ->formatStateUsing(fn ($state): string => Format::dateTime($state)),
+            TextColumn::make('source')
+                ->badge()
+                ->color(fn (?string $state): string => $state === 'promotion' ? 'warning' : 'gray')
+                ->formatStateUsing(fn (?string $state): string => self::SOURCES[$state] ?? ucfirst((string) ($state ?? 'deposit'))),
             TextColumn::make('trans_id')
                 ->label('M-Pesa Code')
                 ->fontFamily('mono')

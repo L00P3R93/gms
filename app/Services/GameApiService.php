@@ -977,7 +977,7 @@ class GameApiService
         'ledger', 'deposits', 'withdrawals', 'purchases', 'adjustments', 'games', 'competitions',
         'customers-top', 'cash-flow', 'income-statement', 'trial-balance', 'expenses', 'taxes',
         'excise-duty', 'excise-duty-charges', 'excise-duty-returns', 'excise-duty-remittances', 'disputes',
-        'referral-bonuses', 'referral-withdrawals',
+        'referral-bonuses', 'referral-withdrawals', 'promotions',
     ];
 
     /**
@@ -1471,6 +1471,8 @@ class GameApiService
      */
     public const PROMO_CODE_STATUSES = ['active', 'expired', 'deactivated'];
 
+    public const ACTIVE_PROMO_CODES_CACHE_KEY = 'game_api:promo-codes:active-count';
+
     /**
      * One page of promo codes, newest first, as the `data` payload (`items` plus `pagination`).
      *
@@ -1498,7 +1500,19 @@ class GameApiService
             ->reject(fn ($value): bool => $value === null || $value === '')
             ->all();
 
-        return $this->makeRequest('POST', '/promo-codes', $body, timeout: 20, idempotencyKey: $idempotencyKey)['data'] ?? [];
+        $promoCode = $this->makeRequest('POST', '/promo-codes', $body, timeout: 20, idempotencyKey: $idempotencyKey)['data'] ?? [];
+
+        Cache::forget(self::ACTIVE_PROMO_CODES_CACHE_KEY);
+
+        return $promoCode;
+    }
+
+    /**
+     * How many codes are active right now, cached for a minute.
+     */
+    public function countActivePromoCodes(): int
+    {
+        return Cache::remember(self::ACTIVE_PROMO_CODES_CACHE_KEY, 60, fn (): int => (int) ($this->listPromoCodes(['status' => 'active', 'per_page' => 1])['pagination']['total'] ?? 0));
     }
 
     /**
@@ -1513,7 +1527,11 @@ class GameApiService
     {
         $enc = $this->encryptId($promoCodeId);
 
-        return $this->makeRequest('POST', "/promo-codes/{$enc}/deactivate", timeout: 20, idempotencyKey: $idempotencyKey)['data'] ?? [];
+        $promoCode = $this->makeRequest('POST', "/promo-codes/{$enc}/deactivate", timeout: 20, idempotencyKey: $idempotencyKey)['data'] ?? [];
+
+        Cache::forget(self::ACTIVE_PROMO_CODES_CACHE_KEY);
+
+        return $promoCode;
     }
 
     /**

@@ -33,7 +33,8 @@ class IncomeStatementReport extends FinanceReportPage
             ['label' => 'Total Revenue', 'value' => Format::money($revenue['total'] ?? 0), 'description' => 'House cuts + gift/emoji sales', 'icon' => 'heroicon-m-banknotes', 'color' => 'success'],
             ['label' => 'Expenses', 'value' => Format::money($data['expenses']['total'] ?? 0), 'description' => ($data['expenses']['tracked'] ?? false) ? 'Recorded expenses' : 'Expenses not tracked', 'icon' => 'heroicon-m-receipt-percent', 'color' => 'warning'],
             ['label' => 'Referral Payouts', 'value' => Format::money(static::amountOf($data['referral_payouts'] ?? 0)), 'description' => 'Referral withdrawals completed; bonuses earned '.Format::money(static::amountOf($data['memo']['referral_bonuses_earned'] ?? 0)), 'icon' => 'heroicon-m-gift', 'color' => 'warning'],
-            ['label' => 'Net Income', 'value' => Format::money($data['net_income'] ?? 0), 'description' => 'Revenue less expenses and referral payouts', 'icon' => 'heroicon-m-chart-bar', 'color' => ($data['net_income'] ?? 0) >= 0 ? 'primary' : 'danger'],
+            ['label' => 'Promotions', 'value' => Format::money(static::amountOf($data['promotions'] ?? 0)), 'description' => 'Signup bonuses granted, gross incl. excise', 'icon' => 'heroicon-m-ticket', 'color' => 'warning'],
+            ['label' => 'Net Income', 'value' => Format::money($data['net_income'] ?? 0), 'description' => 'Revenue less expenses, referral payouts and promotions', 'icon' => 'heroicon-m-chart-bar', 'color' => ($data['net_income'] ?? 0) >= 0 ? 'primary' : 'danger'],
             ['label' => 'Unattributed Competition Income', 'value' => Format::money($revenue['competitions_unattributed'] ?? 0), 'description' => 'Not yet tied to a round tier', 'icon' => 'heroicon-m-question-mark-circle', 'color' => 'gray'],
         ];
     }
@@ -101,9 +102,17 @@ class IncomeStatementReport extends FinanceReportPage
                 ],
             ],
             [
+                'title' => 'Promotions',
+                'description' => 'What the house wallet paid for signup bonuses, including the excise duty owed on them.',
+                'headers' => ['Line', 'Amount'],
+                'rows' => [
+                    ['Signup bonuses (expense)', $money(static::amountOf($data['promotions'] ?? 0))],
+                ],
+            ],
+            [
                 'title' => 'Trend',
                 'description' => 'Revenue and net income per '.($data['meta']['period']['group_by'] ?? 'day'),
-                'headers' => ['Period', 'Games', 'Tournaments', 'Jackpots', 'Total revenue', 'Expenses', 'Referral payouts', 'Net income'],
+                'headers' => ['Period', 'Games', 'Tournaments', 'Jackpots', 'Total revenue', 'Expenses', 'Referral payouts', 'Promotions', 'Net income'],
                 'rows' => collect($data['series'] ?? [])
                     ->map(fn (array $row): array => [
                         $row['period'] ?? '—',
@@ -113,6 +122,7 @@ class IncomeStatementReport extends FinanceReportPage
                         $money($row['total'] ?? 0),
                         $money($row['expenses'] ?? 0),
                         $money(static::amountOf($row['referral_payouts'] ?? 0)),
+                        $money(static::amountOf($row['promotions'] ?? 0)),
                         $money($row['net_income'] ?? 0),
                     ])
                     ->all(),
