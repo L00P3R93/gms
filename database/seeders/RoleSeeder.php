@@ -24,6 +24,9 @@ class RoleSeeder extends Seeder
             'referral-withdrawals.settle',
             'referral-codes.edit',
 
+            // Promotions
+            'promo-codes.manage',
+
             // Shareholders
             'holders.view',
             'holders.create',
